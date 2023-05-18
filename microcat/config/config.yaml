@@ -1,0 +1,58 @@
+params:
+  begin: trimming
+  samples: sample.tsv
+  data_dir:
+
+  simulate:
+    do: false
+    threads: 8
+
+  trimming:
+
+
+  host:
+    cellranger:
+      do: false
+      reference: "/data/database/refdata-gex-GRCh38-2020-A"
+      variousParams: ""
+      threads: 40
+    starsolo:
+      do: True
+      reference: "/data/database/STAR_microbiome/Mycobacterium_canettii/"
+      variousParams: ""
+      assay: tenX_v3
+      threads: 40
+
+  classifier:
+    kraken2uniq:
+      do: true
+      kraken2_database: "/data/database/RefSeqV205_500G"
+      threads: 40
+    krakenuniq:
+      do: false
+      kraken2_database: "/data/database/RefSeqV205_500G"
+      threads: 40
+      estimate_precision: 12
+
+
+output:
+  simulate: results/00.simulate
+  raw: results/00.raw
+  trimming: results/01.trimming
+  host: results/02.host
+  classifier: results/03.classifier
+
+logs:
+  prepare: "logs/00.prepare"
+  host: "logs/02.host"
+  classifier: "logs/03.classifier"
+
+benchmarks:
+  host: "benchmarks/02.host"
+  classifier: "benchmarks/03.classifier"
+
+
+envs:
+  kraken2: ../envs/kraken2.yaml
+  krakenuniq: ../envs/krakenuniq.yaml
+

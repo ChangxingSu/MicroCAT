@@ -1,0 +1,9 @@
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - krakenuniq
+  - pandas
+  - bracken=2.8
+  - krakentools=1.2
