@@ -1,6 +1,9 @@
 import pandas as pd
 import glob
 import os
+## beta test
+sys.path.append('/data/project/host-microbiome/microcat/microcat/')
+import sample
 # # Find the input fastq files with the cDNA reads
 # # setup of standard 10X runs is assumed with scDNA in R2
 # # fastq files are assumed to begin with the sample name, contain "R2", and end with "fastq.gz"
@@ -87,7 +90,7 @@ import os
 def gather_fastq_files(wildcards):
     from snakemake.io import Wildcards
     fastq_files = []
-    for sample in _samples:
+    for sample in SAMPLES:
         wildcards_sample = Wildcards(fromdict={"sample": sample['sample']})
         barcode_dict = checkpoints.cellranger_unmapped_demultiplex.get(**wildcards_sample).output
         for barcode in barcode_dict.keys():
@@ -189,11 +192,11 @@ if config["params"]["host"]["starsolo"]["do"]:
         # This will be executed if the string "tenX" is in the assay parameter
 
         if config["params"]["host"]["starsolo"]["assay"]=="tenX_v3":
-            rule starsolo_count:
+            rule starsolo_10x_count:
                 input:
                     # Directory containing input fastq files
-                    barcode_reads = lambda wildcards: get_starsolo_sample_id(_samples, wildcards, "fq1"),
-                    cdna_reads = lambda wildcards: get_starsolo_sample_id(_samples, wildcards, "fq2")
+                    barcode_reads = lambda wildcards: sample.get_starsolo_sample_id(SAMPLES, wildcards, "fq1"),
+                    cdna_reads = lambda wildcards: sample.get_starsolo_sample_id(SAMPLES, wildcards, "fq2")
                 output:
                     # Path to the output features.tsv file
                     features_file = os.path.join(
@@ -208,7 +211,7 @@ if config["params"]["host"]["starsolo"]["do"]:
                     # Path to the output unmapped bam
                     mapped_bam_file = os.path.join(
                         config["output"]["host"],
-                        "starsolo_count//{sample}/Aligned.out.bam")
+                        "starsolo_count/{sample}/Aligned.out.bam")
                 params:
                     starsolo_out = os.path.join(
                         config["output"]["host"],
@@ -259,11 +262,11 @@ if config["params"]["host"]["starsolo"]["do"]:
                     mv "{params.starsolo_out}/{wildcards.sample}/Aligned.out.bam" "{output.mapped_bam_file}";\
                     '''        
         if config["params"]["host"]["starsolo"]["assay"]=="tenX_v1":
-            rule starsolo_count:
+            rule starsolo_10x_count:
                 input:
                     # Directory containing input fastq files
-                    barcode_reads = lambda wildcards: get_starsolo_sample_id(_samples, wildcards, "fq1"),
-                    cdna_reads = lambda wildcards: get_starsolo_sample_id(_samples, wildcards, "fq2")
+                    barcode_reads = lambda wildcards: sample.get_starsolo_sample_id(SAMPLES, wildcards, "fq1"),
+                    cdna_reads = lambda wildcards: sample.get_starsolo_sample_id(SAMPLES, wildcards, "fq2")
                 output:
                     # Path to the output features.tsv file
                     features_file = os.path.join(
@@ -331,11 +334,11 @@ if config["params"]["host"]["starsolo"]["do"]:
                     '''   
 
         if config["params"]["host"]["starsolo"]["assay"]=="tenX_v2":
-            rule starsolo_count:
+            rule starsolo_10x_count:
                 input:
                     # Directory containing input fastq files
-                    barcode_reads = lambda wildcards: get_starsolo_sample_id(_samples, wildcards, "fq1"),
-                    cdna_reads = lambda wildcards: get_starsolo_sample_id(_samples, wildcards, "fq2")
+                    barcode_reads = lambda wildcards: get_starsolo_sample_id(SAMPLES, wildcards, "fq1"),
+                    cdna_reads = lambda wildcards: get_starsolo_sample_id(SAMPLES, wildcards, "fq2")
                 output:
                     # Path to the output features.tsv file
                     features_file = os.path.join(
@@ -465,7 +468,7 @@ if config["params"]["host"]["starsolo"]["do"]:
             input:
                 expand(os.path.join(
                     config["output"]["host"],
-                    "starsolo_count/{sample}/Aligned.out.unmapped.CBsorted.bam"),sample=[s['sample'] for s in _samples])
+                    "starsolo_count/{sample}/Aligned.out.unmapped.CBsorted.bam"), sample=SAMPLES_ID_LIST)
         
     else:
         rule starsolo_10X_all:
@@ -473,11 +476,9 @@ if config["params"]["host"]["starsolo"]["do"]:
 
 
     if config["params"]["host"]["starsolo"]["assay"]=="SmartSeq2" or config["params"]["host"]["starsolo"]["assay"]=="SmartSeq":
-        rule starsolo_count:
+        rule starsolo_smartseq_count:
             # Input files
             input:
-                # Directory containing input fastq files
-                indir=config["params"]["fastqs_dir"],
                 # Path to the input manifest file
                 manifest = config["params"]["host"]["starsolo"]["manifest"]
             output:
@@ -623,18 +624,15 @@ else:
     rule starsolo_all:
         input:
 
-
-
-
 if config["params"]["host"]["cellranger"]["do"]:
 # expected input format for FASTQ file
 # cellranger call to process the raw samples
     rule cellranger_count:
         input:
             # fastqs_dir = config["params"]["data_dir"],
-            # r1 = lambda wildcards: get_sample_id(_samples, wildcards, "fq1"),
-            # r2 = lambda wildcards: get_sample_id(_samples, wildcards, "fq2")
-            fastqs_dir=lambda wildcards: get_fastqs_dir(wildcards),
+            # r1 = lambda wildcards: get_sample_id(SAMPLES, wildcards, "fq1"),
+            # r2 = lambda wildcards: get_sample_id(SAMPLES, wildcards, "fq2")
+            fastqs_dir=lambda wildcards: sample.get_fastqs_dir(SAMPLES,wildcards),
         output:
             features_file = os.path.join(
                 config["output"]["host"],
@@ -790,25 +788,14 @@ if config["params"]["host"]["cellranger"]["do"]:
         input:
             expand(os.path.join(
             config["output"]["host"],
-            "cellranger_count/{sample}/{sample}_unmappped2human_CB_sorted_bam.bam"),sample=sample_names)
-    # rule cellranger_all:
-    #     input:
-    #         expand(aggregate_CB_bam_output, sample=[s['sample'] for s in _samples])
-            # expand([
-            #     os.path.join(
-            #     config["output"]["host"],
-            #     "cellranger_count/{sample}/unmapped_bam_CB_demultiplex/CB_{barcode}_R1.fastq"),
-            #     os.path.join(
-            #     config["output"]["host"],
-            #     "cellranger_count/{sample}/unmapped_bam_CB_demultiplex/CB_{barcode}_R2.fastq")],
-            #         sample=glob_wildcards(os.path.join(config["output"]["host"], "cellranger_count/{sample}/unmapped_bam_CB_demultiplex/CB_{barcode}.bam")).sample,
-            #         barcode=glob_wildcards(os.path.join(config["output"]["host"], "cellranger_count/{sample}/unmapped_bam_CB_demultiplex/CB_{barcode}.bam")).barcode
-            #         )
+            "cellranger_count/{sample}/{sample}_unmappped2human_CB_sorted_bam.bam"),sample=SAMPLES_ID_LIST)
+
 else:
     rule cellranger_all:
         input:
 
                 
+
 
 
 rule host_all:

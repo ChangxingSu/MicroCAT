@@ -6,8 +6,9 @@
 *.Rhistory
 
 
-./microcat/rules/
+
 ./docs/
+./microcat/data/
 src/*_cache
 src/*_files
 src/.ipynb_checkpoints

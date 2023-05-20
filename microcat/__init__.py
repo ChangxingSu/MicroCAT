@@ -3,7 +3,7 @@ from configer import MicrocatConfig
 from configer import parse_yaml
 from configer import update_config
 from configer import custom_help_formatter
-
+import sample
 
 # from __about__ import __version__,__author__
 

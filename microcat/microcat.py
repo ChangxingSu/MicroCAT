@@ -8,16 +8,19 @@ from io import StringIO
 import configer
 import pandas as pd
 
+WORKFLOWS_MAG = [
+    "host_all",
+    "check_all",]
 
-def update_config_tools(conf, begin, trimmer, host, assemblers, classifier,assay=None):
+def update_config_tools(conf, host, classifier,assay=None):
     conf["params"]["simulate"]["do"] = False
-    conf["params"]["begin"] = begin
+    # conf["params"]["begin"] = begin
 
-    for trimmer_ in ["sickle", "fastp"]:
-        if trimmer_ == trimmer:
-            conf["params"]["trimming"][trimmer_]["do"] = True
-        else:
-            conf["params"]["trimming"][trimmer_]["do"] = False
+    # for trimmer_ in ["sickle", "fastp"]:
+    #     if trimmer_ == trimmer:
+    #         conf["params"]["trimming"][trimmer_]["do"] = True
+    #     else:
+    #         conf["params"]["trimming"][trimmer_]["do"] = False
 
     for hoster_ in ["starsolo","cellranger"]:
         if hoster_ == host:
@@ -33,17 +36,17 @@ def update_config_tools(conf, begin, trimmer, host, assemblers, classifier,assay
         else:
             conf["params"]["classifier"][classifier_]["do"] = False
 
-    if begin == "simulate":
-        conf["params"]["simulate"]["do"] = True
-    elif begin == "rmhost":
-        conf["params"]["trimming"][trimmer]["do"] = False
-    elif (begin == "assembly") or (begin == "binning"):
-        conf["params"]["raw"]["save_reads"] = True
-        conf["params"]["raw"]["fastqc"]["do"] = False
-        conf["params"]["qcreport"]["do"] = False
+    # if begin == "simulate":
+    #     conf["params"]["simulate"]["do"] = True
+    # elif begin == "rmhost":
+    #     conf["params"]["trimming"][trimmer]["do"] = False
+    # elif (begin == "assembly") or (begin == "binning"):
+    #     conf["params"]["raw"]["save_reads"] = True
+    #     conf["params"]["raw"]["fastqc"]["do"] = False
+    #     conf["params"]["qcreport"]["do"] = False
 
-        conf["params"]["trimming"][trimmer]["do"] = False
-        conf["params"]["rmhost"][host]["do"] = False
+    #     conf["params"]["trimming"][trimmer]["do"] = False
+    #     conf["params"]["rmhost"][host]["do"] = False
     return conf
 
 
@@ -72,13 +75,31 @@ def init(args, unknown):
 
 
         # Update environment configuration file paths
+        # for env_name in conf["envs"]:
+        #     conf["envs"][env_name] = os.path.join(os.path.realpath(args.workdir), f"envs/{env_name}.yaml")
+        overwrite_all = None
         for env_name in conf["envs"]:
-            conf["envs"][env_name] = os.path.join(os.path.realpath(args.workdir), f"envs/{env_name}.yaml")
-
+            new_path = os.path.join(os.path.realpath(args.workdir), f"envs/{env_name}.yaml")
+            if os.path.exists(new_path):
+                if overwrite_all is None:
+                    print(f"Warning: The file '{new_path}' already exists.")
+                    proceed = input("Do you want to overwrite it? (y/n/all/quit): ").lower()
+                    if proceed == 'n':
+                        print("Skip updating this file.")
+                        continue
+                    elif proceed == 'all':
+                        overwrite_all = True
+                    elif proceed == 'quit':
+                        print("Aborted.")
+                        sys.exit(1)
+                elif overwrite_all is False:
+                    print("Skip updating this file.")
+                    continue
+            conf["envs"][env_name] = new_path
 
         # Update the configuration with the selected tools
         conf = update_config_tools(
-            conf, args.begin, args.trimmer, args.host,args.classifier,args.denosing,args.assay
+            conf,args.host,args.classifier,args.assay
         )
 
         # Add the user-supplied samples table to the configuration
@@ -123,8 +144,6 @@ def run_snakemake(args, unknown, snakefile, workflow):
         args.config,
         "--cores",
         str(args.cores),
-        "--until",
-        args.task
     ] + unknown
 
     # Add specific flags to the command based on the input arguments
@@ -472,15 +491,15 @@ def main():
             prog="smart bulk_wf",
             help="bulk rna seq microbiome mining pipeline",
         )
-    parser_bulk_wf.add_argument(
-        "task",
-        metavar="TASK",
-        nargs="?",
-        type=str,
-        default="all",
-        choices=WORKFLOWS_MAG,
-        help="pipeline end point. Allowed values are " + ", ".join(WORKFLOWS_MAG),
-    )
+    # parser_bulk_wf.add_argument(
+    #     "task",
+    #     metavar="TASK",
+    #     nargs="?",
+    #     type=str,
+    #     default="all",
+    #     choices=[WORKFLOWS_MAG],
+    #     help="pipeline end point. Allowed values are " + ", ".join(WORKFLOWS_MAG),
+    # )
     parser_bulk_wf.set_defaults(func=bulk_wf)
 
     parser_scrna_wf = subparsers.add_parser(
@@ -498,15 +517,15 @@ def main():
             choices=["10x", "smart-seq2"],
             help="single cell sequencing platform,support 10x and smart-seq2",
         )
-    parser_scrna_wf.add_argument(
-        "task",
-        metavar="TASK",
-        nargs="?",
-        type=str,
-        default="all",
-        choices=WORKFLOWS_MAG,
-        help="pipeline end point. Allowed values are " + ", ".join(WORKFLOWS_MAG),
-    )
+    # parser_scrna_wf.add_argument(
+    #     "task",
+    #     metavar="TASK",
+    #     nargs="?",
+    #     type=str,
+    #     default="all",
+    #     choices=WORKFLOWS_MAG,
+    #     help="pipeline end point. Allowed values are " + ", ".join(WORKFLOWS_MAG),
+    # )
     parser_scrna_wf.set_defaults(func=scRNA_wf)
 
     args, unknown = parser.parse_known_args()
