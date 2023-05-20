@@ -75,27 +75,8 @@ def init(args, unknown):
 
 
         # Update environment configuration file paths
-        # for env_name in conf["envs"]:
-        #     conf["envs"][env_name] = os.path.join(os.path.realpath(args.workdir), f"envs/{env_name}.yaml")
-        overwrite_all = None
         for env_name in conf["envs"]:
-            new_path = os.path.join(os.path.realpath(args.workdir), f"envs/{env_name}.yaml")
-            if os.path.exists(new_path):
-                if overwrite_all is None:
-                    print(f"Warning: The file '{new_path}' already exists.")
-                    proceed = input("Do you want to overwrite it? (y/n/all/quit): ").lower()
-                    if proceed == 'n':
-                        print("Skip updating this file.")
-                        continue
-                    elif proceed == 'all':
-                        overwrite_all = True
-                    elif proceed == 'quit':
-                        print("Aborted.")
-                        sys.exit(1)
-                elif overwrite_all is False:
-                    print("Skip updating this file.")
-                    continue
-            conf["envs"][env_name] = new_path
+            conf["envs"][env_name] = os.path.join(os.path.realpath(args.workdir), f"envs/{env_name}.yaml")
 
         # Update the configuration with the selected tools
         conf = update_config_tools(
