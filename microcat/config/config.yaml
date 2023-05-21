@@ -26,13 +26,19 @@ params:
   classifier:
     kraken2uniq:
       do: true
-      kraken2_database: "/data/database/RefSeqV205_500G"
+      kraken2_database: "/data/database/kraken2_RefSeqV217_Complete_Chrom_nont"
       threads: 40
     krakenuniq:
       do: false
       kraken2_database: "/data/database/RefSeqV205_500G"
       threads: 40
       estimate_precision: 12
+    sckmer:
+      cb_len: 16
+      umi_len: 10
+      min_frac: 0.5
+      kmer_len: 35
+      nsample: 1000
 
 
 output:

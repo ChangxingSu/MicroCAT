@@ -156,8 +156,13 @@ def get_starsolo_sample_id(SAMPLES, wildcards, fq_column):
     return file_path
 
 
-def get_sample_id(sample_df, wildcards, col):
-    return sample_df.loc[wildcards.sample, [col]].dropna()[0]
+def get_sample_id(SAMPLES, wildcards, col):
+    sample_id = wildcards.sample
+    try:
+        col_value = SAMPLES.loc[sample_id, col]
+    except KeyError:
+        raise ValueError(f"Sample ID '{sample_id}' not found in SAMPLES DataFrame.")
+    return col_value
 
 def get_fastqs_dir(SAMPLES, wildcards):
     """

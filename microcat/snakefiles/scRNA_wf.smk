@@ -85,7 +85,7 @@ else:
 
 
 try:
-    SAMPLES = sample.parse_samples(config["params"]["samples"],platform = PLATFORM)
+    SAMPLES = sample.parse_bam_samples(config["params"]["samples"],platform = PLATFORM)
     SAMPLES_ID_LIST = SAMPLES.index.get_level_values("sample_id").unique()
 except FileNotFoundError:
     warning(f"ERROR: the samples file does not exist. Please see the README file for details. Quitting now.")
@@ -111,11 +111,11 @@ except FileNotFoundError:
 #     )
 # include rules
 # include: "../rules/common.smk",
-include: "../rules/host.smk",
+# include: "../rules/host.smk",
 # include: "../rules/ERCC.smk"
-# include: "../rules/classfier.smk"
+include: "../rules/classfier.smk"
 
 
 rule all:
     input:
-        rules.host_all.input
+        rules.classifier_all.input
