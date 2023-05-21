@@ -30,6 +30,21 @@ def warning(msg):
     print(f"\n{ansitxt.BOLD}{ansitxt.RED}{msg}{ansitxt.ENDC}\n",file=sys.stderr)
 
 
+PLATFORM = None
+
+if config["params"]["host"]["starsolo"]["do"]:
+    if "tenX" in config["params"]["host"]["starsolo"]["assay"]:
+        PLATFORM = "tenX"
+    elif "Smartseq" in config["params"]["host"]["starsolo"]["assay"]:
+        PLATFORM = "smartseq"
+    else:
+        raise ValueError("Platform must be either 'tenX' or 'smartseq'")
+elif config["params"]["host"]["cellranger"]["do"]:
+    PLATFORM = "tenX"
+else:
+    raise ValueError("Platform must be either 'tenX' or 'smartseq'")
+
+
 # def parse_samples(samples_tsv):
 #     # Load the sample.tsv file into a pandas DataFrame
 #     df = pandas.read_csv(samples_tsv, sep='\t')
@@ -70,7 +85,7 @@ def warning(msg):
 
 
 try:
-    SAMPLES = sample.parse_samples(config["params"]["samples"])
+    SAMPLES = sample.parse_samples(config["params"]["samples"],platform = PLATFORM)
     SAMPLES_ID_LIST = SAMPLES.index.get_level_values("sample_id").unique()
 except FileNotFoundError:
     warning(f"ERROR: the samples file does not exist. Please see the README file for details. Quitting now.")

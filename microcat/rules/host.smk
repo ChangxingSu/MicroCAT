@@ -105,14 +105,7 @@ def gather_fastq_files(wildcards):
     return fastq_files
 
 
-def get_SAMattrRGline_from_manifest(manifest_file):
-    # read the manifest file
-    df = pd.read_csv(manifest_file, sep="\t", header=None)
-    # get the third column which contains the cell ids
-    cell_ids = df[2]
-    # generate the --outSAMattrRGline input format
-    rgline = " , ".join([f"ID:{cell_id}" for cell_id in cell_ids])
-    return rgline
+
 
 
 
