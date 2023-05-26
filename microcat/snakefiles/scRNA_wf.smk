@@ -7,7 +7,8 @@ import numpy as np
 import pandas
 
 ## beta test
-sys.path.append('/data/project/host-microbiome/microcat/microcat/')
+sys.path.append('/data/med-sucx/host-microbiome/MicroCAT/microcat/')
+
 import sample
 
 wildcard_constraints:

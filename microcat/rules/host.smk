@@ -2,7 +2,7 @@ import pandas as pd
 import glob
 import os
 ## beta test
-sys.path.append('/data/project/host-microbiome/microcat/microcat/')
+sys.path.append('/data/med-sucx/host-microbiome/MicroCAT/microcat/')
 import sample
 # # Find the input fastq files with the cDNA reads
 # # setup of standard 10X runs is assumed with scDNA in R2
@@ -662,6 +662,9 @@ if config["params"]["host"]["cellranger"]["do"]:
         #     runtime=config["tools"]["cellranger_count"]["runtime"],
         threads: 
             config["params"]["host"]["cellranger"]["threads"]
+        resources:
+            mem_mb=102400,
+            disk_mb=10000
         log:
             os.path.join(config["logs"]["host"],
                         "cellranger/{sample}_cellranger_count.log")
@@ -700,18 +703,22 @@ if config["params"]["host"]["cellranger"]["do"]:
             config["output"]["host"],
             "cellranger_count/{sample}/{sample}_mappped2human_bam.bam")
         output:
-            unmapped_bam_unsorted_file = temp(os.path.join(
+            unmapped_bam_unsorted_file = os.path.join(
             config["output"]["host"],
-            "cellranger_count/{sample}/{sample}_unmappped2human_sorted_bam.bam"))
+            "cellranger_count/{sample}/{sample}_unmappped2human_sorted_bam.bam")
+        threads: 
+            16
+        resources:
+            mem_mb=16384
         shell:
             '''
             samtools view --threads  {threads}  -b -f 4   {input.mapped_bam_file}  >  {output.unmapped_bam_unsorted_file};
             '''
     rule cellranger_unmapped_sorted:
         input:
-            unmapped_bam_unsorted_file = temp(os.path.join(
+            unmapped_bam_unsorted_file = os.path.join(
             config["output"]["host"],
-            "cellranger_count/{sample}/{sample}_unmappped2human_sorted_bam.bam"))
+            "cellranger_count/{sample}/{sample}_unmappped2human_sorted_bam.bam")
         output:
             unmapped_bam_CBsorted_file = os.path.join(
             config["output"]["host"],
@@ -781,7 +788,7 @@ if config["params"]["host"]["cellranger"]["do"]:
         input:
             expand(os.path.join(
             config["output"]["host"],
-            "cellranger_count/{sample}/{sample}_unmappped2human_CB_sorted_bam.bam"),sample=SAMPLES_ID_LIST)
+            "cellranger_count/{sample}/{sample}_unmappped2human_sorted_bam.bam"),sample=SAMPLES_ID_LIST)
 
 else:
     rule cellranger_all:
