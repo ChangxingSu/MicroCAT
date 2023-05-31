@@ -13,7 +13,7 @@ params:
   host:
     cellranger:
       do: false
-      reference: "/data/database/refdata-gex-GRCh38-2020-A"
+      reference: "/data/med-sucx/databases/10x_refdata-gex-GRCh38-2020-A/refdata-gex-GRCh38-2020-A/"
       variousParams: ""
       threads: 40
     starsolo:
