@@ -153,9 +153,9 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
             {input.unmapped_fastq} \
             --use-names \
             --memory-mapping \
-            2>&1 | tee {log}\
-            cut -f 1-3,6-8 {output.krak2_report} > {output.krak2_std_report}
-            python /data/scRNA/test-10x/scripts/kraken2mpa.py -r {output.krak2_std_report} -o {output.krak2_mpa_report}
+            2>&1 | tee {log};\
+            cut -f 1-3,6-8 {output.krak2_report} > {output.krak2_std_report};\
+            python /data/scRNA/test-10x/scripts/kraken2mpa.py -r {output.krak2_std_report} -o {output.krak2_mpa_report};
             '''
     rule extract_kraken2_reads:
         input:
@@ -190,7 +190,7 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
             --taxid 9606 \
             --exclude \
             --include-parents \
-            2>&1 | tee {log}
+            2>&1 | tee {log};
             '''
 
     rule extract_kraken2_report:
