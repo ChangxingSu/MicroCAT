@@ -30,7 +30,7 @@ def update_config_tools(conf, host, classifier,assay=None):
         else:
             conf["params"]["host"][hoster_]["do"] = False
 
-    for classifier_ in ["kraken2uniq","krakenuniq"]:
+    for classifier_ in ["kraken2uniq","krakenuniq","pathseq"]:
         if classifier_ in classifier:
             conf["params"]["classifier"][classifier_]["do"] = True
         else:
@@ -154,7 +154,9 @@ def run_snakemake(args, unknown, snakefile, workflow):
 
         # Add flags for running tasks locally
         elif args.run_local:
-            cmd += ["--cores", str(args.cores)]
+            cmd += ["--cores", str(args.cores),
+                    "--local-cores", str(args.local_cores),
+                    "--jobs", str(args.jobs)]
         elif args.run_remote:
             profile_path = os.path.join("./profiles", args.cluster_engine)
             cmd += ["--profile", profile_path,
@@ -457,7 +459,7 @@ def main():
         nargs="+",
         required=False,
         default="kraken2uniq",
-        choices=["kraken2uniq","krakenuniq"],
+        choices=["kraken2uniq","krakenuniq","pathseq"],
         help="wchich classifier used",
     )
 

@@ -28,11 +28,22 @@ params:
       do: true
       kraken2_database: "/data/database/kraken2_RefSeqV217_Complete_Chrom_nont"
       threads: 40
+      mem_mb: 200000
+    pathseq:
+      do: false
+      microbe_bwa_image: /data/database/pathseq_database/ref201_CSI/reference.fasta.img
+      microbe_dict: /data/database/pathseq_database/ref201_CSI/microbev1.dict
+      host_bfi: /data/database/pathseq_database/ref201_CSI/pathseq_host.bfi
+      taxonomy_db: /data/database/pathseq_database/ref201_CSI/microbev1_release201_taxonomy.db
+      host_bwa_image: /data/database/pathseq_database/ref201_CSI/pathseq_host.fa.img
+      threads: 24
+      mem_mb: 200000
     krakenuniq:
       do: false
-      kraken2_database: "/data/database/RefSeqV205_500G"
+      krakenuniq_database: "/data/database/krakenuniq_database/EuPathDB46/"
       threads: 40
       estimate_precision: 12
+      mem_mb: 200000
     sckmer:
       cb_len: 16
       umi_len: 10
@@ -61,4 +72,5 @@ benchmarks:
 envs:
   kraken2: ../envs/kraken2.yaml
   krakenuniq: ../envs/krakenuniq.yaml
+  pathseq: ../envs/pathseq.yaml
 

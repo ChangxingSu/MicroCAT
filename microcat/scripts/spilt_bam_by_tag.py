@@ -46,7 +46,13 @@ for read in tqdm(samfile, unit="read"):
         if tag_hold != 'unset':
             split_file.close()
         tag_hold = tag_itr
-        split_file = pysam.AlignmentFile(os.path.join(args.output_dir, "{}_{}.bam".format(args.tag, tag_itr)), "wb", template=samfile)
+
+        output_subdir = os.path.join(args.output_dir, "{}".format(tag_itr))
+        if not os.path.exists(output_subdir):
+            os.makedirs(output_subdir,exist_ok=True)
+        
+        split_file = pysam.AlignmentFile(os.path.join(output_subdir, "Aligned_sortedByName_unmapped_out.bam".format(args.tag, tag_itr)), "wb", template=samfile)
+        # split_file = pysam.AlignmentFile(os.path.join(args.output_dir, "{}_{}.bam".format(args.tag, tag_itr)), "wb", template=samfile)
         logging.info('Opened new file for writing: %s', split_file.filename.decode())
 
     # Write read with same tag to file

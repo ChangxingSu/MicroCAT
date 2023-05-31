@@ -76,130 +76,39 @@ import sample
 #         samtools fastq --threads {threads}   {input}  -1 {output.unmapped_fastq_1} -2  {output.unmapped_fastq_2}
 #         '''
 
+rule paired_bam_to_fastq:
+    input:
+        unmapped_bam_sorted_file =os.path.join(
+        config["output"]["host"],
+        "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam")
+    output:
+        unmapped_fastq = os.path.join(
+            config["output"]["host"],
+            "unmapped_host/{sample}/{sample}_unmappped2human_bam.fastq")
+    # threads:
+    #     16
+    resources:
+        mem_mb=100000
+    priority: 11
+    shell:
+        '''
+        samtools fastq --threads {threads}  -n {input.unmapped_bam_sorted_file}  > {output.unmapped_fastq}
+        '''
+
 
 if config["params"]["classifier"]["kraken2uniq"]["do"]:
-    # rule kraken2uniq_cell_classified:
-    #     input:
-    #         r1 = expand(os.path.join(
-    #             config["output"]["host"],
-    #             "cellranger_count/{sample}/unmapped_bam_CB_demultiplex/CB_{barcode}_R1.fastq"), barcode=get_barcodes(wildcards.sample)),
-    #         r2 = expand(os.path.join(
-    #             config["output"]["host"],
-    #             "cellranger_count/{sample}/unmapped_bam_CB_demultiplex/CB_{barcode}_R2.fastq"), barcode=get_barcodes(wildcards.sample))
-    #     output:
-    #         krak2_classified_output_r1 = expand(os.path.join(
-    #             config["output"]["classifier"],
-    #             "classified_output/{sample}/cell_level/{sample}_{barcode}_kraken2_classified_1.fq"), barcode=get_barcodes(wildcards.sample)),
-    #         krak2_classified_output_r2 = expand(os.path.join(
-    #             config["output"]["classifier"],
-    #             "classified_output/{sample}/cell_level/{sample}_{barcode}_kraken2_classified_2.fq"), barcode=get_barcodes(wildcards.sample)),
-    #         krak2_unclassified_output_r1 = expand(os.path.join(
-    #             config["output"]["classifier"],
-    #             "unclassified_output/{sample}/cell_level/{sample}_{barcode}_kraken2_unclassified_1.fq"), barcode=get_barcodes(wildcards.sample)),
-    #         krak2_unclassified_output_r2 = expand(os.path.join(
-    #             config["output"]["classifier"],
-    #             "unclassified_output/{sample}/cell_level/{sample}_{barcode}_kraken2_unclassified_2.fq"), barcode=get_barcodes(wildcards.sample)),
-    #         krak2_output = expand(os.path.join(
-    #             config["output"]["classifier"],
-    #             "kraken2_output/{sample}/cell_level/{sample}_{barcode}_kraken2_output.txt"), barcode=get_barcodes(wildcards.sample)),
-    #         krak2_report = expand(os.path.join(
-    #             config["output"]["classifier"],
-    #             "kraken2_report/custom/{sample}/cell_level/{sample}_{barcode}_kraken2_report.txt"), barcode=get_barcodes(wildcards.sample)),
-    #         krak2_std_report=expand(os.path.join(
-    #             config["output"]["classifier"],
-    #             "kraken2_report/standard/{sample}/cell_level/{sample}_{barcode}_kraken2_std_report.txt"), barcode=get_barcodes(wildcards.sample)),
-    #         krak2_mpa_report=expand(os.path.join(
-    #             config["output"]["classifier"],
-    #             "kraken2_report/mpa/{sample}/cell_level/{sample}_{barcode}_kraken2_mpa_report.txt"), barcode=get_barcodes(wildcards.sample))
-    #     params:
-    #         database = config["params"]["classifier"]["kraken2uniq"]["kraken2_database"],
-    #         #since kraken2uniq acquire specific input fomrat "#fq",so we put it it params
-    #         krak2_classified_output=expand(os.path.join(
-    #             config["output"]["classifier"],
-    #             "classified_output/{sample}/cell_level/{sample}_{barcode}_kraken2_classified#.fq"), barcode=get_barcodes(wildcards.sample)),
-    #         krak2_unclassified_output=expand(os.path.join(
-    #             config["output"]["classifier"],
-    #             "unclassified_output/{sample}/cell_level/{sample}_{barcode}_kraken2_unclassified#.fq"), barcode=get_barcodes(wildcards.sample)),
-    #         threads=config["params"]["classifier"]["kraken2uniq"]["threads"]
-    #     benchmark:
-    #         expand(os.path.join(config["benchmarks"]["classifier"],
-    #                             "kraken2uniq/{sample}/cell_level/{sample}_{barcode}_kraken2uniq_classifier_benchmark.log"), barcode=get_barcodes(wildcards.sample))
-    #     log:
-    #         expand(os.path.join(config["logs"]["classifier"],
-    #                             "kraken2uniq/{sample}/cell_level/{sample}_{barcode}_kraken2uniq_classifier.log"), barcode=get_barcodes(wildcards.sample))
-    #     conda:
-    #         config["envs"]["kraken2"]
-    #     shell:
-    #         '''
-    #         kraken2 --db {params.database} \
-    #         --threads {params.threads} \
-    #         --classified-out {params.krak2_classified_output}\
-    #         --unclassified-out {params.krak2_unclassified_output}\
-    #         --output {output.krak2_output} \
-    #         --report {output.krak2_report} \
-    #         --report-minimizer-data \
-    #         {input.r1} {input.r2} \
-    #         --use-names \
-    #         --paired \
-    #         --memory-mapping \
-    #         2> >(tee {log})
-    #         cut -f 1-3,6-8 {output.krak2_report} > {output.krak2_std_report}
-    #         python /data/scRNA/test-10x/scripts/kraken2mpa.py -r {output.krak2_std_report} -o {output.krak2_mpa_report}
-    #         '''
-    rule cellranger_unmapped_extracted:
-        input:
-            mapped_bam_file = lambda wildcards: sample.get_sample_id(SAMPLES,wildcards,"bam_pe"),
-        output:
-            unmapped_bam_unsorted_file = os.path.join(
-            config["output"]["host"],
-            "cellranger_count/{sample}/{sample}_unmappped2human_unsorted_bam.bam")
-        params:
-            threads=20
-        shell:
-            '''
-            samtools view --threads  {params.threads}  -b -f 4   {input.mapped_bam_file}  >  {output.unmapped_bam_unsorted_file};
-            '''
-
-    rule paired_bam_to_fastq:
-        input:
-            unmapped_bam_unsorted_file = os.path.join(
-            config["output"]["host"],
-            "cellranger_count/{sample}/{sample}_unmappped2human_unsorted_bam.bam")
-        output:
-            unmapped_fastq_1 = os.path.join(
-                                config["output"]["host"],
-                                "cellranger_count/{sample}/{sample}_unmappped2human_R1.fastq"),
-            unmapped_fastq_2 = os.path.join(
-                                config["output"]["host"],
-                                "cellranger_count/{sample}/{sample}_unmappped2human_R2.fastq")
-        threads:
-            16
-        priority: 11
-        shell:
-            '''
-            samtools fastq --threads {threads}   {input.unmapped_bam_unsorted_file}  -1 {output.unmapped_fastq_1} -2  {output.unmapped_fastq_2}
-            '''
     rule kraken2uniq_classified:
         input:
-            r1 = os.path.join(
-                    config["output"]["host"],
-                    "cellranger_count/{sample}/{sample}_unmappped2human_R1.fastq"),
-            r2 = os.path.join(
-                    config["output"]["host"],
-                    "cellranger_count/{sample}/{sample}_unmappped2human_R2.fastq")
+            unmapped_fastq = os.path.join(
+                config["output"]["host"],
+                "unmapped_host/{sample}/{sample}_unmappped2human_bam.fastq")
         output:
-            krak2_classified_output_r1 = os.path.join(
+            krak2_classified_output_fq = os.path.join(
                 config["output"]["classifier"],
-                "rmhost_classified_output/{sample}/{sample}_kraken2_classified_1.fq"),
-            krak2_classified_output_r2 = os.path.join(
+                "rmhost_classified_output/{sample}/{sample}_kraken2_classified.fq"),
+            krak2_unclassified_output_fq = os.path.join(
                 config["output"]["classifier"],
-                "rmhost_classified_output/{sample}/{sample}_kraken2_classified_2.fq"),
-            krak2_unclassified_output_r1 = os.path.join(
-                config["output"]["classifier"],
-                "rmhost_unclassified_output/{sample}/{sample}_kraken2_unclassified_1.fq"),
-            krak2_unclassified_output_r2 = os.path.join(
-                config["output"]["classifier"],
-                "rmhost_unclassified_output/{sample}/{sample}_kraken2_unclassified_2.fq"),
+                "rmhost_unclassified_output/{sample}/{sample}_kraken2_unclassified.fq"),
             krak2_output = os.path.join(
                 config["output"]["classifier"],
                 "rmhost_kraken2_output/{sample}/{sample}_kraken2_output.txt"),
@@ -214,51 +123,45 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
                 "rmhost_kraken2_report/mpa/{sample}/{sample}_kraken2_mpa_report.txt")
         params:
             database = config["params"]["classifier"]["kraken2uniq"]["kraken2_database"],
-            #since kraken2uniq acquire specific input fomrat "#fq",so we put it it params
-            krak2_classified_output=os.path.join(
-                config["output"]["classifier"],
-                "rmhost_classified_output/{sample}/{sample}_kraken2_classified#.fq"),
-            krak2_unclassified_output=os.path.join(
-                config["output"]["classifier"],
-                "rmhost_unclassified_output/{sample}/{sample}_kraken2_unclassified#.fq")
+            #since kraken2 acquire specific input fomrat "#fq",so we put it it params
+            # krak2_classified_output=os.path.join(
+            #     config["output"]["classifier"],
+            #     "classified_output/{sample}/{sample}_kraken2_classified#.fq"),
+            # krak2_unclassified_output=os.path.join(
+            #     config["output"]["classifier"],
+            #     "unclassified_output/{sample}/{sample}_kraken2_unclassified#.fq")
+        resources:
+            mem_mb=config["params"]["classifier"]["kraken2uniq"]["mem_mb"]
+        priority: 12
         threads: 
             config["params"]["classifier"]["kraken2uniq"]["threads"]
         benchmark:
             os.path.join(config["benchmarks"]["classifier"],
-                        "kraken2uniq/{sample}_kraken2uniq_classifier_benchmark.log")
+                        "rmhost_kraken2uniq/{sample}_kraken2uniq_classifier_benchmark.log")
         log:
             os.path.join(config["logs"]["classifier"],
-                        "kraken2uniq/{sample}_kraken2uniq_classifier.log")
-        message:
-            "Classifier: Performing Taxonomic Classifcation of Sample {sample} with kraken2uniq."
-        conda:
-            config["envs"]["kraken2"]
+                        "rmhost_kraken2uniq/{sample}_kraken2uniq_classifier.log")
         shell:
             '''
             kraken2 --db {params.database} \
-            --threads 8 \
-            --classified-out {params.krak2_classified_output}\
-            --unclassified-out {params.krak2_unclassified_output}\
+            --threads 20 \
+            --classified-out {output.krak2_classified_output_fq}\
+            --unclassified-out {output.krak2_unclassified_output_fq}\
             --output {output.krak2_output} \
             --report {output.krak2_report} \
             --report-minimizer-data \
-            {input.r1} {input.r2} \
+            {input.unmapped_fastq} \
             --use-names \
-            --paired \
             --memory-mapping \
-            2> >(tee {log})
+            2>&1 | tee {log}\
             cut -f 1-3,6-8 {output.krak2_report} > {output.krak2_std_report}
             python /data/scRNA/test-10x/scripts/kraken2mpa.py -r {output.krak2_std_report} -o {output.krak2_mpa_report}
             '''
-
     rule extract_kraken2_reads:
         input:
-            krak2_classified_output_r1 = os.path.join(
+            krak2_classified_output_fq = os.path.join(
                 config["output"]["classifier"],
-                "rmhost_classified_output/{sample}/{sample}_kraken2_classified_1.fq"),
-            krak2_classified_output_r2 = os.path.join(
-                config["output"]["classifier"],
-                "rmhost_classified_output/{sample}/{sample}_kraken2_classified_2.fq"),
+                "rmhost_classified_output/{sample}/{sample}_kraken2_classified.fq"),
             krak2_output = os.path.join(
                 config["output"]["classifier"],
                 "rmhost_kraken2_output/{sample}/{sample}_kraken2_output.txt"),
@@ -266,33 +169,28 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
                 config["output"]["classifier"],
                 "rmhost_kraken2_report/custom/{sample}/{sample}_kraken2_report.txt"),
         output:
-            krak2_extracted_output_r1 = os.path.join(
+            krak2_extracted_output_fq = os.path.join(
                 config["output"]["classifier"],
-                "rmhost_extracted_classified_output/{sample}/{sample}_kraken2_extracted_classified_1.fq"),
-            krak2_extracted_output_r2 = os.path.join(
-                config["output"]["classifier"],
-                "rmhost_extracted_classified_output/{sample}/{sample}_kraken2_extracted_classified_2.fq"),
+                "rmhost_extracted_classified_output/{sample}/{sample}_kraken2_extracted_classified.fq"),
         log:
             os.path.join(config["logs"]["classifier"],
-                        "kraken2uniq_extracted/{sample}_kraken2uniq_classifier_extracted.log")
+                        "rmhost_kraken2uniq_extracted/{sample}_kraken2uniq_classifier_extracted.log")
         benchmark:
             os.path.join(config["benchmarks"]["classifier"],
-                            "kraken2uniq/{sample}_kraken2uniq_classifier_extracted_benchmark.log")
+                            "rmhost_kraken2uniq/{sample}_kraken2uniq_classifier_extracted_benchmark.log")
         conda:
             config["envs"]["kraken2"]
         shell:
             '''
             python /data/scRNA/test-10x/scripts/extract_kraken_reads.py \
             -k {input.krak2_output} \
-            -s1 {input.krak2_classified_output_r1} \
-            -s2 {input.krak2_classified_output_r2} \
+            -s1 {input.krak2_classified_output_fq} \
             --report {input.krak2_report}\
-            -o {output.krak2_extracted_output_r1} \
-            -o2 {output.krak2_extracted_output_r2} \
+            -o {output.krak2_extracted_output_fq} \
             --taxid 9606 \
             --exclude \
             --include-parents \
-            2> >(tee {log})
+            2>&1 | tee {log}
             '''
 
     rule extract_kraken2_report:
@@ -314,9 +212,10 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
             os.path.join(config["logs"]["classifier"],
                         "rmhost_kraken2uniq_extracted/{sample}_kraken2uniq_classifier_report_extracted.log")
         threads:
-            16
+            8
         shell:
             '''
+            pwd
             Rscript /data/scRNA/test-10x/scripts/extract_microbiome_output.R \
             --output_file {input.krak2_output} \
             --kraken_report {input.krak2_report} \
@@ -329,12 +228,9 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
 
     rule k_mer_test:
         input:
-            krak2_extracted_output_r1 = os.path.join(
+            krak2_extracted_output_fq = os.path.join(
                 config["output"]["classifier"],
-                "rmhost_extracted_classified_output/{sample}/{sample}_kraken2_extracted_classified_1.fq"),
-            krak2_extracted_output_r2 = os.path.join(
-                config["output"]["classifier"],
-                "rmhost_extracted_classified_output/{sample}/{sample}_kraken2_extracted_classified_2.fq"),
+                "rmhost_extracted_classified_output/{sample}/{sample}_kraken2_extracted_classified.fq"),
             krak2_extracted_output = os.path.join(
                 config["output"]["classifier"],
                 "rmhost_extracted_classified_output/{sample}/{sample}_kraken2_extracted_classified_output.txt"),
@@ -362,9 +258,8 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
             nsample = config["params"]["classifier"]["sckmer"]["nsample"]
         shell:
             '''
-            Rscript /data/scRNA/test-10x/scripts/sckmer.R \
-            --fa1 {input.krak2_extracted_output_r1} \
-            --fa2 {input.krak2_extracted_output_r2} \
+            Rscript /data/scRNA/test-10x/scripts/sckmer_unpaired.R \
+            --fa1 {input.krak2_extracted_output_fq} \
             --microbiome_output_file {input.krak2_extracted_output} \
             --cb_len {params.cb_len} \
             --umi_len {params.umi_len} \
@@ -377,119 +272,166 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
             --kmer_test_file {output.krak2_sckmer_test_output} \
             2> >(tee {log})
             '''
+    rule sample_denosing:
+        input:
+            krak2_sckmer_test_output = os.path.join(
+                                config["output"]["classifier"],
+                                "rmhost_classified_qc/kmer_UMI/{sample}/{sample}_kraken2_sckmer_correlation_test.txt"),
+        output:
+            krak2_sample_denosing = os.path.join(
+                                config["output"]["classifier"],
+                                "rmhost_classified_qc/kmer_UMI/{sample}/{sample}_sample_denosing.txt"),
+        params:
+            krak2_report_dir = os.path.join(
+                config["output"]["classifier"],
+                "rmhost_kraken2_report/custom/"),
+            SampleID="{sample}",
+        shell:
+            '''
+            Rscript  /home/microcat-sucx/project/scRNA-analysis/Lee2020/scripts/sample_denosing.R\
+            --path {params.krak2_report_dir} \
+            --kmer_data {input.krak2_sckmer_test_output} \
+            --out_path {output.krak2_sample_denosing} \
+            --sample_names {params.SampleID} \
+            --min_reads 2 
+            '''
+
+    rule krak2_output_denosing:
+        input:
+            krak2_extracted_output = os.path.join(
+                config["output"]["classifier"],
+                "rmhost_extracted_classified_output/{sample}/{sample}_kraken2_extracted_classified_output.txt"),
+            krak2_sample_denosing = os.path.join(
+                config["output"]["classifier"],
+                "rmhost_classified_qc/kmer_UMI/{sample}/{sample}_sample_denosing.txt"),
+        output:
+            krak2_output_denosing = os.path.join(
+                config["output"]["classifier"],
+                "rmhost_classified_qc/kmer_UMI/{sample}/{sample}_kraken2_output_denosing.txt"),
+        shell:
+            '''
+            Rscript /data/scRNA/test-10x/scripts/krak2_output_denosing.R \
+            --output_file {input.krak2_extracted_output} \
+            --taxa {input.krak2_sample_denosing} \
+            --out_krak2_denosing {output.krak2_output_denosing}
+            '''
+    rule krak2_matrix_build:
+        input:
+            krak2_output_denosing = os.path.join(
+                config["output"]["classifier"],
+                "rmhost_classified_qc/kmer_UMI/{sample}/{sample}_kraken2_output_denosing.txt"),
+            unmapped_bam_sorted_file =os.path.join(
+                config["output"]["host"],
+                "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam")
+        output:
+            krak2_output_denosing_label = os.path.join(config["output"]["classifier"],"microbiome_matrix_build/{sample}/data.txt")
+        params:
+            database = config["params"]["classifier"]["kraken2uniq"]["kraken2_database"],
+            threads = 20,
+            matrix_outdir = os.path.join(config["output"]["classifier"],
+                "microbiome_matrix_build/{sample}/"),
+        log:
+            os.path.join(config["logs"]["classifier"],
+                        "microbiome_matrix_build/{sample}_matrix.log")
+        shell:
+            '''
+            python /data/scRNA/test-10x/scripts/kraken2sc.py \
+            --bam {input.unmapped_bam_sorted_file} \
+            --kraken_output {input.krak2_output_denosing}  \
+            --dbfile {params.database} \
+            --log_file {log} \
+            --processors {params.threads} \
+            --outdir {params.matrix_outdir}
+            '''
+            
     rule kraken2uniq_classified_all:
         input:
-            expand(os.path.join(
-                config["output"]["classifier"],
-                "rmhost_classified_qc/kmer_UMI/{sample}/{sample}_kraken2_sckmer.txt"),sample=SAMPLES_ID_LIST),
-            expand(os.path.join(
-                config["output"]["classifier"],
-                "rmhost_classified_qc/kmer_UMI/{sample}/{sample}_kraken2_sckmer_correlation_test.txt"),sample=SAMPLES_ID_LIST) 
-    # rule kraken2uniq_classified:
-    #     input:
-    #         r1 = os.path.join(
-    #             config["output"]["host"],
-    #             "starsolo_count/unmapped_fastq/{sample}_1.fastq"),
-    #         r2 = os.path.join(
-    #             config["output"]["host"],
-    #             "starsolo_count/unmapped_fastq/{sample}_2.fastq")
-    #     output:
-    #         krak2_classified_output_r1 = os.path.join(
-    #             config["output"]["classifier"],
-    #             "classified_output/{sample}/{sample}_kraken2_classified_1.fq"),
-    #         krak2_classified_output_r2 = os.path.join(
-    #             config["output"]["classifier"],
-    #             "classified_output/{sample}/{sample}_kraken2_classified_2.fq"),
-    #         krak2_unclassified_output_r1 = os.path.join(
-    #             config["output"]["classifier"],
-    #             "unclassified_output/{sample}/{sample}_kraken2_unclassified_1.fq"),
-    #         krak2_unclassified_output_r2 = os.path.join(
-    #             config["output"]["classifier"],
-    #             "unclassified_output/{sample}/{sample}_kraken2_unclassified_2.fq"),
-    #         krak2_output = os.path.join(
-    #             config["output"]["classifier"],
-    #             "kraken2_output/{sample}/{sample}_kraken2_output.txt"),
-    #         krak2_report = os.path.join(
-    #             config["output"]["classifier"],
-    #             "kraken2_report/custom/{sample}/{sample}_kraken2_report.txt"),
-    #         krak2_std_report=os.path.join(
-    #             config["output"]["classifier"],
-    #             "kraken2_report/standard/{sample}/{sample}_kraken2_std_report.txt"),
-    #         krak2_mpa_report=os.path.join(
-    #             config["output"]["classifier"],
-    #             "kraken2_report/mpa/{sample}/{sample}_kraken2_mpa_report.txt")
-    #     params:
-    #         database = config["params"]["classifier"]["kraken2uniq"]["kraken2_database"],
-    #         #since kraken2uniq acquire specific input fomrat "#fq",so we put it it params
-    #         krak2_classified_output=os.path.join(
-    #             config["output"]["classifier"],
-    #             "classified_output/{sample}/{sample}_kraken2_classified#.fq"),
-    #         krak2_unclassified_output=os.path.join(
-    #             config["output"]["classifier"],
-    #             "unclassified_output/{sample}/{sample}_kraken2_unclassified#.fq")
-    #     threads: 
-    #         config["params"]["classifier"]["kraken2uniq"]["threads"]
-    #     benchmark:
-    #         os.path.join(config["benchmarks"]["classifier"],
-    #                     "kraken2uniq/{sample}_kraken2uniq_classifier_benchmark.log")
-    #     log:
-    #         os.path.join(config["logs"]["classifier"],
-    #                     "kraken2uniq/{sample}_kraken2uniq_classifier.log")
-    #     message:
-    #         "Classifier: Performing Taxonomic Classifcation of Sample {sample} with kraken2uniq."
-    #     conda:
-    #         config["envs"]["kraken2"]
-    #     shell:
-    #         '''
-    #         kraken2 --db {params.database} \
-    #         --threads 8 \
-    #         --classified-out {params.krak2_classified_output}\
-    #         --unclassified-out {params.krak2_unclassified_output}\
-    #         --output {output.krak2_output} \
-    #         --report {output.krak2_report} \
-    #         --report-minimizer-data \
-    #         {input.r1} {input.r2} \
-    #         --use-names \
-    #         --paired \
-    #         --memory-mapping \
-    #         2> >(tee {log})
-    #         cut -f 1-3,6-8 {output.krak2_report} > {output.krak2_std_report}
-    #         python /data/scRNA/test-10x/scripts/kraken2mpa.py -r {output.krak2_std_report} -o {output.krak2_mpa_report}
-    #         '''
+            expand(os.path.join(config["output"]["classifier"],"microbiome_matrix_build/{sample}/data.txt"),sample=SAMPLES_ID_LIST)
 else:
     rule kraken2uniq_classified_all:
         input:    
 
 if config["params"]["classifier"]["krakenuniq"]["do"]:
-    # rule krakenuniq_classifier:
+    rule krakenuniq_classifier:
+        input:
+            unmapped_fastq = os.path.join(
+                config["output"]["host"],
+                "unmapped_host/{sample}/{sample}_unmappped2human_bam.fastq")
+        output:
+            krakenuniq_output = os.path.join(
+                config["output"]["classifier"],
+                "rmhost_krakenuniq_output/{sample}/{sample}_krakenuniq_output.txt"),
+            krakenuniq_report = os.path.join(
+                config["output"]["classifier"],
+                "rmhost_krakenuniq_report/custom/{sample}/{sample}_krakenuniq_report.txt"),
+            krakenuniq_classified_output = os.path.join(
+                config["output"]["classifier"],
+                "rmhost_krakenuniq_classified_output/{sample}/{sample}_krakenuniq_classified.fq"),
+            krakenuniq_unclassified_output = os.path.join(
+                config["output"]["classifier"],
+                "rmhost_krakenuniq_unclassified_output/{sample}/{sample}_krakenuniq_unclassified.fq")
+        params:
+            database = config["params"]["classifier"]["krakenuniq"]["krakenuniq_database"],
+            threads=config["params"]["classifier"]["krakenuniq"]["threads"],
+            estimate_precision=config["params"]["classifier"]["krakenuniq"]["estimate_precision"]
+        benchmark:
+            os.path.join(config["benchmarks"]["classifier"],
+                        "rmhost_krakenuniq/{sample}_kraken2uniq_classifier_benchmark.tsv")
+        log:
+            os.path.join(config["logs"]["classifier"],
+                        "rmhost_krakenuniq/{sample}_krakenuniq_classifier.log")
+        resources:
+            mem_mb=config["params"]["classifier"]["krakenuniq"]["mem_mb"]
+        conda:
+            config["envs"]["krakenuniq"]
+        message:
+            "Classifier: Performing Taxonomic Classifcation of Sample {sample} with krakenuniq."
+        shell:
+            '''
+            krakenuniq --db {params.database} \
+            --threads {params.threads} \
+            --hll-precision {params.estimate_precision} \
+            --classified-out {output.krakenuniq_classified_output}\
+            --unclassified-out {output.krakenuniq_unclassified_output}\
+            --output {output.krakenuniq_output} \
+            --report-file {output.krakenuniq_report} \
+            {input.unmapped_fastq}  \
+            --preload \
+            2>&1 | tee {log}
+            '''
+    # rule krakenuniq_cell_level_classifier:
     #     input:
-    #         r1 = os.path.join(
+    #         r1 = expand(os.path.join(
     #             config["output"]["host"],
-    #             "starsolo_count/unmapped_fastq/{sample}_1.fastq"),
-    #         r2 = os.path.join(
+    #             "cellranger_count/{sample}/unmapped_bam_CB_demultiplex/CB_{barcode}_R1.fastq"), barcode=get_barcodes(wildcards.sample)),
+    #         r2 = expand(os.path.join(
     #             config["output"]["host"],
-    #             "starsolo_count/unmapped_fastq/{sample}_2.fastq")
+    #             "cellranger_count/{sample}/unmapped_bam_CB_demultiplex/CB_{barcode}_R2.fastq"), barcode=get_barcodes(wildcards.sample))
     #     output:
-    #         krakenuniq_output = os.path.join(
+    #         krakenuniq_output = expand(os.path.join(
     #             config["output"]["classifier"],
-    #             "krakenuniq_output/{sample}/{sample}_krakenuniq_output.txt"),
-    #         krakenuniq_report = os.path.join(
+    #             "krakenuniq_output/{sample}/cell_level/{sample}_{barcode}_krakenuniq_output.txt"), barcode=get_barcodes(wildcards.sample)),
+    #         krakenuniq_report = expand(os.path.join(
     #             config["output"]["classifier"],
-    #             "krakenuniq_report/custom/{sample}/{sample}_krakenuniq_report.txt"),
-    #         krakenuniq_classified_output = os.path.join(
+    #             "krakenuniq_report/custom/{sample}/cell_level/{sample}_{barcode}_krakenuniq_report.txt"), barcode=get_barcodes(wildcards.sample)),
+    #         krakenuniq_classified_output = expand(os.path.join(
     #             config["output"]["classifier"],
-    #             "krakenuniq_classified_output/{sample}/{sample}_krakenuniq_classified.fq"),
-    #         krakenuniq_unclassified_output = os.path.join(
+    #             "krakenuniq_classified_output/{sample}/cell_level/{sample}_{barcode}_krakenuniq_classified.fq"), barcode=get_barcodes(wildcards.sample)),
+    #         krakenuniq_unclassified_output = expand(os.path.join(
     #             config["output"]["classifier"],
-    #             "krakenuniq_classified_output/{sample}/{sample}_krakenuniq_classified.fq")
+    #             "krakenuniq_classified_output/{sample}/cell_level/{sample}_{barcode}_krakenuniq_unclassified.fq"), barcode=get_barcodes(wildcards.sample))
     #     params:
     #         database = config["params"]["classifier"]["krakenuniq"]["krakenuniq_database"],
     #         threads=config["params"]["classifier"]["krakenuniq"]["threads"],
     #         estimate_precision=config["params"]["classifier"]["krakenuniq"]["estimate_precision"]
+    #     benchmark:
+    #         expand(os.path.join(config["benchmarks"]["classifier"],
+    #                     "krakenuniq/{sample}/cell_level/{sample}_{barcode}_krakenuniq_classifier_benchmark.log"), barcode=get_barcodes(wildcards.sample))
+    #     log:
+    #         expand(os.path.join(config["logs"]["classifier"],
+    #                     "krakenuniq/{sample}/cell_level/{sample}_{barcode}_krakenuniq_classifier.log"), barcode=get_barcodes(wildcards.sample))
     #     conda:
     #         config["envs"]["krakenuniq"]
-    #     message:
-    #         "Classifier: Performing Taxonomic Classifcation of Sample {sample} with krakenuniq."
     #     shell:
     #         '''
     #         krakenuniq --db {params.database} \
@@ -505,62 +447,102 @@ if config["params"]["classifier"]["krakenuniq"]["do"]:
     #         --check-names \
     #         2>&1 | tee {log})
     #         '''
-    rule krakenuniq_cell_level_classifier:
-        input:
-            r1 = expand(os.path.join(
-                config["output"]["host"],
-                "cellranger_count/{sample}/unmapped_bam_CB_demultiplex/CB_{barcode}_R1.fastq"), barcode=get_barcodes(wildcards.sample)),
-            r2 = expand(os.path.join(
-                config["output"]["host"],
-                "cellranger_count/{sample}/unmapped_bam_CB_demultiplex/CB_{barcode}_R2.fastq"), barcode=get_barcodes(wildcards.sample))
-        output:
-            krakenuniq_output = expand(os.path.join(
-                config["output"]["classifier"],
-                "krakenuniq_output/{sample}/cell_level/{sample}_{barcode}_krakenuniq_output.txt"), barcode=get_barcodes(wildcards.sample)),
-            krakenuniq_report = expand(os.path.join(
-                config["output"]["classifier"],
-                "krakenuniq_report/custom/{sample}/cell_level/{sample}_{barcode}_krakenuniq_report.txt"), barcode=get_barcodes(wildcards.sample)),
-            krakenuniq_classified_output = expand(os.path.join(
-                config["output"]["classifier"],
-                "krakenuniq_classified_output/{sample}/cell_level/{sample}_{barcode}_krakenuniq_classified.fq"), barcode=get_barcodes(wildcards.sample)),
-            krakenuniq_unclassified_output = expand(os.path.join(
-                config["output"]["classifier"],
-                "krakenuniq_classified_output/{sample}/cell_level/{sample}_{barcode}_krakenuniq_unclassified.fq"), barcode=get_barcodes(wildcards.sample))
-        params:
-            database = config["params"]["classifier"]["krakenuniq"]["krakenuniq_database"],
-            threads=config["params"]["classifier"]["krakenuniq"]["threads"],
-            estimate_precision=config["params"]["classifier"]["krakenuniq"]["estimate_precision"]
-        benchmark:
-            expand(os.path.join(config["benchmarks"]["classifier"],
-                        "krakenuniq/{sample}/cell_level/{sample}_{barcode}_krakenuniq_classifier_benchmark.log"), barcode=get_barcodes(wildcards.sample))
-        log:
-            expand(os.path.join(config["logs"]["classifier"],
-                        "krakenuniq/{sample}/cell_level/{sample}_{barcode}_krakenuniq_classifier.log"), barcode=get_barcodes(wildcards.sample))
-        conda:
-            config["envs"]["krakenuniq"]
-        shell:
-            '''
-            krakenuniq --db {params.database} \
-            --threads {params.threads} \
-            --hll-precision {params.estimate_precision} \
-            --classified-out {params.krakenuniq_classified_output}\
-            --unclassified-out {params.krakenuniq_unclassified_output}\
-            --output {output.krakenuniq_output} \
-            --report-file {output.krakenuniq_report} \
-            {input.r1} {input.r2} \
-            --paired \
-            --preload \
-            --check-names \
-            2>&1 | tee {log})
-            '''
     rule krakenuniq_classified_all:
         input:   
+            expand(os.path.join(
+                config["output"]["classifier"],
+                "rmhost_krakenuniq_output/{sample}/{sample}_krakenuniq_output.txt"),sample=SAMPLES_ID_LIST),
+            expand(os.path.join(
+                config["output"]["classifier"],
+                "rmhost_krakenuniq_report/custom/{sample}/{sample}_krakenuniq_report.txt"),sample=SAMPLES_ID_LIST),
+            expand(os.path.join(
+                config["output"]["classifier"],
+                "rmhost_krakenuniq_classified_output/{sample}/{sample}_krakenuniq_classified.fq"),sample=SAMPLES_ID_LIST),
+            expand(os.path.join(
+                config["output"]["classifier"],
+                "rmhost_krakenuniq_unclassified_output/{sample}/{sample}_krakenuniq_unclassified.fq"),sample=SAMPLES_ID_LIST)
 
 else:
     rule krakenuniq_classified_all:
         input:    
 
+if config["params"]["classifier"]["pathseq"]["do"]:
+    rule pathseq_classified:
+        input:
+            unmapped_bam_sorted_file =os.path.join(
+                config["output"]["host"],
+                "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam")
+        output:
+            pathseq_classified_bam_file = os.path.join(
+                config["output"]["classifier"],
+                "pathseq_classified_output/{sample}/{sample}_pathseq_classified.bam"),
+            pathseq_output = os.path.join(
+                config["output"]["classifier"],
+                "pathseq_classified_output/{sample}/{sample}_pathseq_classified.txt"),
+            filter_metrics = os.path.join(
+                config["output"]["classifier"],
+                "pathseq_classified_output/{sample}/{sample}_pathseq_filter_metrics.txt"),
+            score_metrics = os.path.join(
+                config["output"]["classifier"],
+                "pathseq_classified_output/{sample}/{sample}_pathseq_score_metrics.txt"),
+        params:
+            host_bwa_image = config["params"]["classifier"]["pathseq"]["host_bwa_image"],
+            microbe_bwa_image = config["params"]["classifier"]["pathseq"]["microbe_bwa_image"],
+            microbe_dict_file = config["params"]["classifier"]["pathseq"]["microbe_dict"],
+            host_hss_file = config["params"]["classifier"]["pathseq"]["host_bfi"],
+            taxonomy_db = config["params"]["classifier"]["pathseq"]["taxonomy_db"]
+        resources:
+            mem_mb=config["params"]["classifier"]["pathseq"]["mem_mb"]
+        priority: 12
+        threads: 
+            config["params"]["classifier"]["pathseq"]["threads"]
+        conda:
+            config["envs"]["pathseq"]
+        benchmark:
+            os.path.join(config["benchmarks"]["classifier"],
+                        "rmhost_pathseq/{sample}_pathseq_classifier_benchmark.log")
+        log:
+            os.path.join(config["logs"]["classifier"],
+                        "rmhost_pathseq/{sample}_pathseq_classifier.log")
+        shell:
+            '''
+            gatk PathSeqPipelineSpark \
+            --filter-duplicates false \
+            --min-score-identity .7 \
+            --input {input.unmapped_bam_sorted_file} \
+            --filter-bwa-image {params.host_bwa_image} \
+            --kmer-file {params.host_hss_file} \
+            --microbe-bwa-image {params.microbe_bwa_image} \
+            --microbe-dict {params.microbe_dict_file} \
+            --taxonomy-file {params.taxonomy_db} \
+            --output {output.pathseq_classified_bam_file}\
+            --scores-output {output.pathseq_output}\
+            --filter-metrics {output.filter_metrics}\
+            --score-metrics {output.score_metrics}\
+            --java-options "-Xmx200g" \
+            2>&1 | tee {log}\
+            '''
+
+    rule pathseq_classified_all:
+        input:   
+            expand(os.path.join(
+                config["output"]["classifier"],
+                "pathseq_classified_output/{sample}/{sample}_pathseq_classified.bam"),sample=SAMPLES_ID_LIST),
+            expand(os.path.join(
+                config["output"]["classifier"],
+                "pathseq_classified_output/{sample}/{sample}_pathseq_classified.txt"),sample=SAMPLES_ID_LIST),
+            expand(os.path.join(
+                config["output"]["classifier"],
+                "pathseq_classified_output/{sample}/{sample}_pathseq_filter_metrics.txt"),sample=SAMPLES_ID_LIST),
+            expand(os.path.join(
+                config["output"]["classifier"],
+                "pathseq_classified_output/{sample}/{sample}_pathseq_score_metrics.txt"),sample=SAMPLES_ID_LIST)
+else:
+    rule pathseq_classified_all:
+        input:    
+        
 rule classifier_all:
     input:
         rules.kraken2uniq_classified_all.input,
         rules.krakenuniq_classified_all.input,
+        rules.pathseq_classified_all.input

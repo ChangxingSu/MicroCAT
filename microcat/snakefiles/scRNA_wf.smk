@@ -12,7 +12,7 @@ import sample
 
 wildcard_constraints:
     Patient = "[a-zA-Z0-9_]+", # Any alphanumeric characters and underscore
-    tissue = "S[0-9]+",  # S followed by any number
+    # tissue = "S[0-9]+",  # S followed by any number
     lane = "L[0-9]{3}",  # L followed by exactly 3 numbers
     plate = "P[0-9]{3}",  # L followed by exactly 3 numbers
     library = "[0-9]{3}"  # Exactly 3 numbers
@@ -85,7 +85,7 @@ else:
 
 
 try:
-    SAMPLES = sample.parse_bam_samples(config["params"]["samples"],platform = PLATFORM)
+    SAMPLES = sample.parse_samples(config["params"]["samples"],platform = PLATFORM)
     SAMPLES_ID_LIST = SAMPLES.index.get_level_values("sample_id").unique()
 except FileNotFoundError:
     warning(f"ERROR: the samples file does not exist. Please see the README file for details. Quitting now.")
@@ -94,28 +94,19 @@ except FileNotFoundError:
 
 # sample_names = [sample_dict["sample"] for sample_dict in _samples]
 
-# def get_all_inputs(wildcards):
-#     return expand(
-#         [
-#             os.path.join(
-#                 config["output"]["host"],
-#                 "cellranger_count/{sample}/unmapped_bam_CB_demultiplex/CB_{barcode}_R1.fastq"
-#             ),
-#             os.path.join(
-#                 config["output"]["host"],
-#                 "cellranger_count/{sample}/unmapped_bam_CB_demultiplex/CB_{barcode}_R2.fastq"
-#             ),
-#         ],
-#         sample=sample_names,
-#         barcode=[barcode for sample_name in sample_names for barcode in aggregate_CB_bam_output(sample_name)]
-#     )
 # include rules
 # include: "../rules/common.smk",
-# include: "../rules/host.smk",
+include: "../rules/host.smk"
 # include: "../rules/ERCC.smk"
 include: "../rules/classfier.smk"
 
 
+
 rule all:
     input:
+        rules.host_all.input,
+        # directory(os.path.join(config["output"]["host"], "unmapped_host/")),
+        # os.path.join(
+        #             config["output"]["host"],
+        #             "starsolo_count/Aligned_out.bam")
         rules.classifier_all.input

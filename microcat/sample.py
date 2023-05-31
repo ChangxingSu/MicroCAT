@@ -147,14 +147,48 @@ def parse_bam_samples(sample_tsv, platform):
 
 
 
+# def get_starsolo_sample_id(SAMPLES, wildcards, fq_column):
+#     sample_id = wildcards.sample
+#     try:
+#         file_path = SAMPLES.loc[sample_id, fq_column]
+#     except KeyError:
+#         raise ValueError(f"Sample ID '{sample_id}' not found in SAMPLES DataFrame.")
+#     return ','.join(sorted(file_path))
+
+# def get_starsolo_sample_id(SAMPLES, wildcards, fq_column):
+#     sample_id = wildcards.sample
+#     try:
+#         file_paths = SAMPLES.loc[sample_id, fq_column]
+#     except KeyError:
+#         raise ValueError(f"Sample ID '{sample_id}' not found in SAMPLES DataFrame.")
+    
+#     # If there is only one lane, the file_paths will be a string instead of a list
+#     # In that case, convert it to a list
+#     if isinstance(file_paths, str):
+#         file_paths = [file_paths]
+    
+#     return ','.join(sorted(file_paths))
 def get_starsolo_sample_id(SAMPLES, wildcards, fq_column):
     sample_id = wildcards.sample
     try:
-        file_path = SAMPLES.loc[sample_id, fq_column]
+        # file_paths = SAMPLES.loc[sample_id, fq_column]
+        # sorted_paths = sorted(file_paths)
+        # joined_paths = ','.join(sorted_paths)
+        file_paths = SAMPLES.loc[sample_id, fq_column]
+        sorted_paths = sorted(file_paths)
+        joined_paths = ','.join(sorted_paths)
+        return joined_paths
     except KeyError:
         raise ValueError(f"Sample ID '{sample_id}' not found in SAMPLES DataFrame.")
-    return file_path
+# def get_starsolo_sample_id(samples, wildcards, read):
+#     sample_reads = [s[read] for s in samples if s['sample'] == wildcards.sample]
+#     if read == "fq1":
+#         return ','.join(sorted(sample_reads))
+#     elif read == "fq2":
+#         return ' '.join(sorted(sample_reads))
 
+
+    
 
 def get_sample_id(SAMPLES, wildcards, col):
     sample_id = wildcards.sample
@@ -175,6 +209,18 @@ def get_fastqs_dir(SAMPLES, wildcards):
     except KeyError:
         raise ValueError(f"Sample ID '{sample_id}' not found fastqs_dir in SAMPLES DataFrame.")
     return fastqs_dir
+
+def get_samples_bax(wildcards,bam_dir, suffix="bam"):
+
+    sample_id = wildcards.sample
+
+    bam_file = os.path.join(
+        bam_dir,
+        "unmapped_host",
+        sample_id,
+        f"Aligned_sortedByCoord_unmapped_out.{suffix}")
+
+    return bam_file
 
 
 def get_samples_id_by_tissue(sample_df, tissue):

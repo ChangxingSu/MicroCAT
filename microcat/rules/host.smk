@@ -4,87 +4,6 @@ import os
 ## beta test
 sys.path.append('/data/project/host-microbiome/microcat/microcat/')
 import sample
-# # Find the input fastq files with the cDNA reads
-# # setup of standard 10X runs is assumed with scDNA in R2
-# # fastq files are assumed to begin with the sample name, contain "R2", and end with "fastq.gz"
-# def find_cdna_read_fastqs(wildcards):
-#     sample_name = wildcards.sample
-#     mids = glob_wildcards(
-#         config["inputOutput"]["input_fastqs"]
-#         + sample_name
-#         + "{middle}_R2_{end}.fastq.gz"
-#     ).middle
-#     ends = glob_wildcards(
-#         config["inputOutput"]["input_fastqs"]
-#         + sample_name
-#         + "{middle}_R2_{end}.fastq.gz"
-#     ).end
-#     fastqs = expand(
-#         config["inputOutput"]["input_fastqs"]
-#         + "{sample_name}{middle}_R2_{end}.fastq.gz",
-#         sample_name=sample_name,
-#         middle=mids,
-#         end=ends,
-#     )
-#     fast_np = np.array(fastqs)
-#     fastqs_uniq = np.unique(fast_np)
-#     fastqs_comma = ",".join(fastqs_uniq)
-#     return fastqs_comma
-
-
-# # Find the input fastq files with the barcode reads
-# # setup of standard 10X runs is assumed with barcode information in R1
-# # fastq files are assumed to begin with the sample name, contain "R1", and end with "fastq.gz"
-# def find_barcode_read_fastqs(wildcards):
-#     sample_name = wildcards.sample
-#     mids = glob_wildcards(
-#         config["inputOutput"]["input_fastqs"]
-#         + sample_name
-#         + "{middle}_R1_{end}.fastq.gz"
-#     ).middle
-#     ends = glob_wildcards(
-#         config["inputOutput"]["input_fastqs"]
-#         + sample_name
-#         + "{middle}_R1_{end}.fastq.gz"
-#     ).end
-#     fastqs = expand(
-#         config["inputOutput"]["input_fastqs"]
-#         + "{sample_name}{middle}_R1_{end}.fastq.gz",
-#         sample_name=sample_name,
-#         middle=mids,
-#         end=ends,
-#     )
-#     fast_np = np.array(fastqs)
-#     fastqs_uniq = np.unique(fast_np)
-#     fastqs_comma = ",".join(fastqs_uniq)
-#     return fastqs_comma
-
-# def aggregate_CB_bam_output(wildcards):
-#     demultiplex_output = checkpoints.cellranger_unmapped_demultiplex.get(**wildcards).output.unmapped_bam_CB_demultiplex_dir
-#     Barcode_list, = glob_wildcards(os.path.join(demultiplex_output, "CB_{barcode}.bam"))
-#     return expand(os.path.join(
-#         config["output"]["host"],
-#         "cellranger_count/{sample}//unmapped_bam_CB_demultiplex/CB_{barcode}.bam"),
-#         sample=wildcards.sample,
-#         barcode=Barcode_list)
-# def aggregate_CB_bam_output(wildcards):
-#     checkpoint_demultiplex.output = checkpoints.cellranger_unmapped_demultiplex.get(**wildcards).output.unmapped_bam_CB_demultiplex_dir
-#     Barcode_list, = glob_wildcards(os.path.join(checkpoint_demultiplex.output, "CB_{barcode}.bam"))
-#     return expand(os.path.join(
-#         config["output"]["host"],
-#         "cellranger_count/{sample}/unmapped_bam_CB_demultiplex/CB_{barcode}.bam"),
-#         sample=wildcards.sample,
-#         barcode=Barcode_list)
-
-# def aggregate_CB_bam_output(sample_name):
-#     # Trim "_unmapped_bam_CB_demultiplex_dir" from sample wildcard, if it's present
-#     sample_name_trimmed = sample_name.replace("_unmapped_bam_CB_demultiplex_dir", "")
-#     checkpoint_output = checkpoints.cellranger_unmapped_demultiplex.get(sample=sample_name_trimmed).output[0]
-#     Barcode_list, = glob_wildcards(os.path.join(checkpoint_output, "CB_{barcode}.bam"))
-#     return {barcode: os.path.join(
-#         config["output"]["host"],
-#         "cellranger_count/{sample}/unmapped_bam_CB_demultiplex/CB_{barcode}.bam") for barcode in Barcode_list}
-
 
 
 def gather_fastq_files(wildcards):
@@ -180,7 +99,6 @@ def gather_fastq_files(wildcards):
 
 if config["params"]["host"]["starsolo"]["do"]:
 
-
     if "tenX" in config["params"]["host"]["starsolo"]["assay"]:
         # This will be executed if the string "tenX" is in the assay parameter
 
@@ -188,8 +106,7 @@ if config["params"]["host"]["starsolo"]["do"]:
             rule starsolo_10x_count:
                 input:
                     # Directory containing input fastq files
-                    barcode_reads = lambda wildcards: sample.get_starsolo_sample_id(SAMPLES, wildcards, "fq1"),
-                    cdna_reads = lambda wildcards: sample.get_starsolo_sample_id(SAMPLES, wildcards, "fq2")
+                    fastqs_dir=lambda wildcards: sample.get_fastqs_dir(SAMPLES,wildcards),
                 output:
                     # Path to the output features.tsv file
                     features_file = os.path.join(
@@ -204,8 +121,10 @@ if config["params"]["host"]["starsolo"]["do"]:
                     # Path to the output unmapped bam
                     mapped_bam_file = os.path.join(
                         config["output"]["host"],
-                        "starsolo_count/{sample}/Aligned.out.bam")
+                        "starsolo_count/{sample}/Aligned_sortedByCoord_out.bam")
                 params:
+                    barcode_reads = lambda wildcards: sample.get_starsolo_sample_id(SAMPLES, wildcards, "fq1"),
+                    cdna_reads = lambda wildcards: sample.get_starsolo_sample_id(SAMPLES, wildcards, "fq2"),
                     starsolo_out = os.path.join(
                         config["output"]["host"],
                         "starsolo_count/"),
@@ -232,7 +151,7 @@ if config["params"]["host"]["starsolo"]["do"]:
                     --soloUMIlen 12 \
                     --soloBarcodeReadLength 150 \
                     --genomeDir {params.reference} \
-                    --readFilesIn {input.cdna_reads} {input.barcode_reads} \
+                    --readFilesIn {params.cdna_reads} {params.barcode_reads} \
                     --runThreadN {params.threads} \
                     --clipAdapterType CellRanger4 \
                     --outFilterScoreMin 30 \
@@ -258,8 +177,7 @@ if config["params"]["host"]["starsolo"]["do"]:
             rule starsolo_10x_count:
                 input:
                     # Directory containing input fastq files
-                    barcode_reads = lambda wildcards: sample.get_starsolo_sample_id(SAMPLES, wildcards, "fq1"),
-                    cdna_reads = lambda wildcards: sample.get_starsolo_sample_id(SAMPLES, wildcards, "fq2")
+                    fastqs_dir=lambda wildcards: sample.get_fastqs_dir(SAMPLES,wildcards),
                 output:
                     # Path to the output features.tsv file
                     features_file = os.path.join(
@@ -274,8 +192,10 @@ if config["params"]["host"]["starsolo"]["do"]:
                     # Path to the output unmapped bam
                     mapped_bam_file = os.path.join(
                         config["output"]["host"],
-                        "starsolo_count//{sample}/Aligned.out.bam")
+                        "starsolo_count/{sample}/Aligned_sortedByCoord_out.bam")
                 params:
+                    barcode_reads = lambda wildcards: sample.get_starsolo_sample_id(SAMPLES, wildcards, "fq1"),
+                    cdna_reads = lambda wildcards: sample.get_starsolo_sample_id(SAMPLES, wildcards, "fq2"),
                     starsolo_out = os.path.join(
                         config["output"]["host"],
                         "starsolo_count/"),
@@ -322,16 +242,14 @@ if config["params"]["host"]["starsolo"]["do"]:
                     ln -sr "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/filtered/features.tsv" "{output.features_file}" ;
                     ln -sr "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/filtered/matrix.mtx" "{output.matrix_file}" ; 
                     ln -sr "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/filtered/barcodes.tsv" "{output.barcodes_file}" ;\
-                    mv "{params.starsolo_out}{wildcards.sample}/Unmapped.out.mate1" "{output.ummapped_fastq_1}" ;\
-                    mv "{params.starsolo_out}{wildcards.sample}/Unmapped.out.mate2" "{output.ummapped_fastq_2}" \
+                    mv "{params.starsolo_out}/{wildcards.sample}/Aligned.sortedByCoord.out.bam" "{output.mapped_bam_file}";
                     '''   
 
         if config["params"]["host"]["starsolo"]["assay"]=="tenX_v2":
             rule starsolo_10x_count:
                 input:
                     # Directory containing input fastq files
-                    barcode_reads = lambda wildcards: get_starsolo_sample_id(SAMPLES, wildcards, "fq1"),
-                    cdna_reads = lambda wildcards: get_starsolo_sample_id(SAMPLES, wildcards, "fq2")
+                    fastqs_dir=lambda wildcards: sample.get_fastqs_dir(SAMPLES,wildcards),
                 output:
                     # Path to the output features.tsv file
                     features_file = os.path.join(
@@ -346,20 +264,25 @@ if config["params"]["host"]["starsolo"]["do"]:
                     # Path to the output unmapped bam
                     mapped_bam_file = os.path.join(
                         config["output"]["host"],
-                        "starsolo_count/{sample}/Aligned.out.bam")
+                        "starsolo_count/{sample}/Aligned_sortedByCoord_out.bam")
                 params:
                     starsolo_out = os.path.join(
                         config["output"]["host"],
                         "starsolo_count/"),
                     reference = config["params"]["host"]["starsolo"]["reference"],
                     variousParams = config["params"]["host"]["starsolo"]["variousParams"],
-                    threads = config["params"]["host"]["starsolo"]["threads"]
+                    threads = config["params"]["host"]["starsolo"]["threads"],
+                    barcode_reads = lambda wildcards: sample.get_starsolo_sample_id(SAMPLES, wildcards, "fq1"),
+                    cdna_reads = lambda wildcards: sample.get_starsolo_sample_id(SAMPLES, wildcards, "fq2")
                 log:
                     os.path.join(config["logs"]["host"],
                                 "starsolo/{sample}_starsolo_count.log")
                 benchmark:
                     os.path.join(config["benchmarks"]["host"],
                                 "starsolo/{sample}_starsolo_count.benchmark")
+                resources:
+                    threads=20,      # This rule needs 30 threads
+                    mem_mb=100000  # This rule needs 100 GB of memory
                 message: "Executing starsolo with {params.threads} threads on the following files {wildcards.sample}.Library with 10x 3' V2."
                 shell:
                     '''
@@ -367,22 +290,20 @@ if config["params"]["host"]["starsolo"]["do"]:
                     cd {params.starsolo_out} ;
                     STAR \
                     --soloType CB_UMI_Simple \
-                    --soloCBwhitelist ../data/737K-august-2016.txt \
+                    --soloCBwhitelist /data/project/host-microbiome/microcat/microcat/data/737K-august-2016.txt \
                     --soloCBstart 1 \
                     --soloCBlen 16 \
                     --soloUMIstart 17 \
                     --soloUMIlen 10 \
-                    --soloBarcodeReadLength 150 \
                     --genomeDir {params.reference} \
-                    --readFilesIn {input.cdna_reads} {input.barcode_reads} \
+                    --readFilesIn {params.cdna_reads}  {params.barcode_reads} \
                     --runThreadN {params.threads} \
-                    --clipAdapterType CellRanger4 \
-                    --outFilterScoreMin 30 \
                     --soloCBmatchWLtype 1MM_multi_Nbase_pseudocounts \
                     --soloUMIfiltering MultiGeneUMI_CR \
-                    --outSAMtype BAM Unsorted\
-                    --outSAMattrRGline ID:{wildcards.sample} PL:illumina SM:{wildcards.sample} LB:tenX_v3 \
-                    --outSAMattributes NH HI AS nM CB UB CR CY UR UY GX GN \
+                    --outSAMtype BAM SortedByCoordinate\
+                    --outFilterScoreMin 30  \
+                    --outSAMattrRGline ID:{wildcards.sample} PL:illumina SM:{wildcards.sample} LB:tenX_v2 \
+                    --outSAMattributes CR UR CY UY CB UB\
                     --readFilesCommand zcat \
                     --soloUMIdedup 1MM_CR \
                     --outSAMunmapped Within \
@@ -394,74 +315,85 @@ if config["params"]["host"]["starsolo"]["do"]:
                     ln -sr "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/filtered/features.tsv" "{output.features_file}" ;
                     ln -sr "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/filtered/matrix.mtx" "{output.matrix_file}" ; 
                     ln -sr "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/filtered/barcodes.tsv" "{output.barcodes_file}" ;\
-                    mv "{params.starsolo_out}{wildcards.sample}/Unmapped.out.mate1" "{output.ummapped_fastq_1}" ;\
-                    mv "{params.starsolo_out}{wildcards.sample}/Unmapped.out.mate2" "{output.ummapped_fastq_2}" \
+                    mv "{params.starsolo_out}/{wildcards.sample}/Aligned.sortedByCoord.out.bam" "{output.mapped_bam_file}";\
                     '''  
-                     
-        rule starsolo_10x_unmapped_extracted:
+        rule starsolo_10x_unmapped_extracted_sorted:
             input:
                 mapped_bam_file = os.path.join(
                     config["output"]["host"],
-                    "starsolo_count/{sample}/Aligned.out.bam")
+                    "starsolo_count/{sample}/Aligned_sortedByCoord_out.bam")
             output:
-                unmapped_bam_unsorted_file = temp(os.path.join(
-                config["output"]["host"],
-                "starsolo_count/{sample}/Aligned.out.unmapped.bam"))
-            shell:
-                '''
-                samtools view --threads  {threads}  -b -f 4   {input.mapped_bam_file}  >  {output.unmapped_bam_unsorted_file};
-                '''
-        rule starsolo_10x_unmapped_sorted_bam:
-            input:
+                unmapped_bam_sorted_file = os.path.join(
+                    config["output"]["host"],
+                    "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam")
+            params:
+                threads=16,
                 unmapped_bam_unsorted_file = os.path.join(
                     config["output"]["host"],
-                    "starsolo_count/{sample}/Aligned.out.unmapped.bam")
-            output:
-                unmapped_sorted_bam = os.path.join(
-                    config["output"]["host"],
-                    "starsolo_count/{sample}/Aligned.out.unmapped.CBsorted.bam"),
-            params:
-                threads=40,
-                tag="CB"
-            log:
-                os.path.join(config["logs"]["host"],
-                            "starsolo/{sample}/unmapped_sorted_bam.log")
-            benchmark:
-                os.path.join(config["benchmarks"]["host"],
-                            "starsolo/{sample}/unmapped_sorted_bam.benchmark")
+                    "unmapped_host/{sample}/Aligned_sortedByCoord_unmapped_out.bam")
+            ## because bam is sorted by Coord,it's necessary to sort it by read name
             shell:
                 '''
-                samtools sort -@ {params.threads} -t {params.tag} -o {output.unmapped_sorted_bam}  {input.unmapped_bam_unsorted_file};
+                samtools view --threads  {params.threads}  -b -f 4   {input.mapped_bam_file}  >  {params.unmapped_bam_unsorted_file};\
+                samtools sort -n  --threads  {params.threads} {params.unmapped_bam_unsorted_file} -o {output.unmapped_bam_sorted_file}
                 '''
-        rule starsolo_10X_demultiplex_bam_by_cell_barcode:
-            input:
-                unmapped_sorted_bam = os.path.join(
-                    config["output"]["host"],
-                    "starsolo_count/{sample}/Aligned.out.unmapped.RGsorted.bam")
-            output:
-                unmapped_bam_demultiplex_dir = directory(os.path.join(
-                    config["output"]["host"],
-                    "starsolo_count/{sample}/unmapped_bam_CB_demultiplex/"))
-            params:
-                threads = 40, # Number of threads
-                tag="CB"
-            log:
-                os.path.join(
-                    config["logs"]["host"],
-                    "starsolo_count/{sample}/demultiplex_bam_by_read_group.log")
-            benchmark:
-                os.path.join(
-                    config["benchmarks"]["host"], 
-                    "starsolo_count/{sample}/demultiplex_bam_by_read_group.benchmark")
-            shell:
-                """
-                python /data/project/host-microbiome/microcat/microcat/scripts/spilt_bam_by_tag.py --tag {params.tag} --bam_path {input.unmapped_sorted_bam} --output_dir {output.unmapped_bam_demultiplex_dir}  --log_file {log}
-                """
+        # rule starsolo_10x_unmapped_sorted_bam:
+        #     input:
+        #         unmapped_bam_unsorted_file = os.path.join(
+        #             config["output"]["host"],
+        #             "unmapped_host/{sample}/Aligned_sortedByCoord_unmapped_out.bam")
+        #     output:
+        #         unmapped_sorted_bam = os.path.join(
+        #             config["output"]["host"],
+        #             "unmapped_host/{sample}/Aligned.out.unmapped.CBsorted.bam"),
+        #     params:
+        #         threads=40,
+        #         tag="CB"
+        #     log:
+        #         os.path.join(config["logs"]["host"],
+        #                     "starsolo/{sample}/unmapped_sorted_bam.log")
+        #     benchmark:
+        #         os.path.join(config["benchmarks"]["host"],
+        #                     "starsolo/{sample}/unmapped_sorted_bam.benchmark")
+        #     shell:
+        #         '''
+        #         samtools sort -@ {params.threads} -t {params.tag} -o {output.unmapped_sorted_bam}  {input.unmapped_bam_unsorted_file};
+        #         '''
+        # rule starsolo_10X_demultiplex_bam_by_cell_barcode:
+        #     input:
+        #         unmapped_sorted_bam = os.path.join(
+        #             config["output"]["host"],
+        #             "unmapped_host/{sample}/Aligned.out.unmapped.RGsorted.bam")
+        #     output:
+        #         unmapped_bam_demultiplex_dir = directory(os.path.join(
+        #             config["output"]["host"],
+        #             "unmapped_host/{sample}/unmapped_bam_CB_demultiplex/"))
+        #     params:
+        #         threads = 40, # Number of threads
+        #         tag="CB"
+        #     log:
+        #         os.path.join(
+        #             config["logs"]["host"],
+        #             "starsolo_count/{sample}/demultiplex_bam_by_read_group.log")
+        #     benchmark:
+        #         os.path.join(
+        #             config["benchmarks"]["host"], 
+        #             "starsolo_count/{sample}/demultiplex_bam_by_read_group.benchmark")
+        #     shell:
+        #         """
+        #         python /data/project/host-microbiome/microcat/microcat/scripts/spilt_bam_by_tag.py --tag {params.tag} --bam_path {input.unmapped_sorted_bam} --output_dir {output.unmapped_bam_demultiplex_dir}  --log_file {log}
+        #         """
         rule starsolo_10X_all:
             input:
-                expand(os.path.join(
-                    config["output"]["host"],
-                    "starsolo_count/{sample}/Aligned.out.unmapped.CBsorted.bam"), sample=SAMPLES_ID_LIST)
+                # expand(os.path.join(
+                #     config["output"]["classifier"],
+                #     "rmhost_classified_qc/kmer_UMI/{sample}/{sample}_kraken2_sckmer.txt"),sample=SAMPLES_ID_LIST),
+                # expand(os.path.join(config["output"]["classifier"],
+                #     "microbiome_matrix_build/{sample}/data.txt"),sample=SAMPLES_ID_LIST)
+                expand(os.path.join(config["output"]["host"],"unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam"),sample=SAMPLES_ID_LIST)
+                # expand(os.path.join(
+                #     config["output"]["classifier"],
+                #     "rmhost_classified_qc/kmer_UMI/{sample}/{sample}_kraken2_sckmer_correlation_test.txt"),sample=SAMPLES_ID_LIST) 
         
     else:
         rule starsolo_10X_all:
@@ -469,24 +401,66 @@ if config["params"]["host"]["starsolo"]["do"]:
 
 
     if config["params"]["host"]["starsolo"]["assay"]=="SmartSeq2" or config["params"]["host"]["starsolo"]["assay"]=="SmartSeq":
+
+        # rule run_fastp:
+        #     group:
+        #         "run_fastp"
+        #     conda:
+        #         join(ENV_DIR, "fastp.yml")
+        #     input:
+        #         FASTQ1_FILE,
+        #         FASTQ2_FILE
+        #     output:
+        #         TRIMMED_FASTQ1_FILE,
+        #         TRIMMED_FASTQ2_FILE,
+        #         TRIMMED_UNPAIRED_FILE,
+        #         FAILED_READS_FILE,
+        #         FASTP_JSON_REPORT,
+        #         FASTP_HTML_REPORT
+        #     threads:
+        #         6
+        #     benchmark:
+        #         "benchmarks/{patient}-{sample}-{cell}.run_fastp.benchmark.txt"
+        #     shell:
+        #         "fastp -w {threads} "
+        #         "--unqualified_percent_limit 40 " # filter reads where 40% of bases have phred quality < 15
+        #         "--cut_tail " # use defaults --cut_window_size 4 --cut_mean_quality 20
+        #         "--low_complexity_filter " # filter reads with less than 30% complexity (30% of the bases are different from the preceeding base)
+        #         "--trim_poly_x " # trim poly X's - useful for trimming polyA tails
+        #         "-i {input[0]} -I {input[1]} -o {output[0]} -O {output[1]} "
+        #         "--unpaired1 {output[2]} --unpaired2 {output[2]} --failed_out {output[3]} "
+        #         "-j {output[4]} -h {output[5]} "
+        #         + config["params"]["fastp"]
+
+        # rule generate_pe_manifest_file:
+
+        # input:
+        #     config["units"]
+        # output:
+        #     PE_MANIFEST_FILE
+        
+        # script:
+        #     "../src/generate_pe_manifest_file.py"
+        
         rule starsolo_smartseq_count:
             # Input files
             input:
                 # Path to the input manifest file
-                manifest = config["params"]["host"]["starsolo"]["manifest"]
+                manifest = config["params"]["host"]["starsolo"]["manifest"],
+                fastqs_dir=lambda wildcards: sample.get_fastqs_dir(SAMPLES,wildcards),
             output:
                 # Path to the output features.tsv file
                 features_file = os.path.join(
                     config["output"]["host"],
-                    "starsolo_count/Solo.out/Gene/filtered/features.tsv"),
+                    "starsolo_count/features.tsv"),
                 # Path to the output matrix.mtx file
                 matrix_file = os.path.join(
                     config["output"]["host"],
-                    "starsolo_count/Solo.out/Gene/filtered/matrix.mtx"),
+                    "starsolo_count/matrix.mtx"),
                 # Path to the output barcodes.tsv file
                 barcodes_file = os.path.join(
                     config["output"]["host"],
-                    "starsolo_count/Solo.out/Gene/filtered/barcodes.tsv"),
+                    "starsolo_count/barcodes.tsv"),
                 # Path to the output unmapped fastq file for read1
                 # ummapped_fastq_1 = os.path.join(
                 #     config["output"]["host"],
@@ -497,7 +471,7 @@ if config["params"]["host"]["starsolo"]["do"]:
                 #     "starsolo_count/Unmapped.out.mate2"),
                 mapped_bam_file = os.path.join(
                     config["output"]["host"],
-                    "starsolo_count/Aligned.sortedByCoord.out.bam")
+                    "starsolo_count/Aligned_out.bam")
             params:
                 # Path to the output directory
                 starsolo_out = os.path.join(
@@ -507,7 +481,7 @@ if config["params"]["host"]["starsolo"]["do"]:
                 reference = config["params"]["host"]["starsolo"]["reference"],
                 # Type of sequencing library
                 soloType = config["params"]["host"]["starsolo"]["soloType"],
-                SAMattrRGline = get_SAMattrRGline_from_manifest(config["params"]["host"]["starsolo"]["manifest"]),
+                SAMattrRGline = sample.get_SAMattrRGline_from_manifest(config["params"]["host"]["starsolo"]["manifest"]),
                 # Additional parameters for STAR
                 variousParams = config["params"]["host"]["starsolo"]["variousParams"],
                 # Number of threads for STAR
@@ -537,29 +511,37 @@ if config["params"]["host"]["starsolo"]["do"]:
                 {params.variousParams}  \
                 2>&1 | tee ../../../{log} ;
                 pwd ;\
+                cd ../../../;\
+                ln -sr "{params.starsolo_out}/Solo.out/Gene/filtered/features.tsv" "{output.features_file}" ;\
+                ln -sr "{params.starsolo_out}/Solo.out/Gene/filtered/matrix.mtx" "{output.matrix_file}" ; \
+                ln -sr "{params.starsolo_out}/Solo.out/Gene/filtered/barcodes.tsv" "{output.barcodes_file}" ;\
+                mv "{params.starsolo_out}/Aligned.out.bam" "{output.mapped_bam_file}";\
                 '''
-        rule starsolo_smartseq_unmapped_extracted:
+        rule starsolo_smartseq_unmapped_extracted_sorted:
             input:
                 mapped_bam_file = os.path.join(
                     config["output"]["host"],
-                    "starsolo_count/Aligned.out.bam")
+                    "starsolo_count/Aligned_out.bam")
             output:
-                unmapped_bam_unsorted_file = temp(os.path.join(
-                config["output"]["host"],
-                "starsolo_count/Aligned.out.unmapped.bam"))
+                unmapped_bam_unsorted_file = os.path.join(
+                    config["output"]["host"],
+                    "starsolo_count/Aligned_out_unmapped.bam")
+            params:
+                threads=16
             shell:
                 '''
-                samtools view --threads  {threads}  -b -f 4   {input.mapped_bam_file}  >  {output.unmapped_bam_unsorted_file};
+                samtools view --threads  {params.threads}  -b -f 4   {input.mapped_bam_file}  >  {output.unmapped_bam_unsorted_file};\
                 '''
+
         rule starsolo_smartseq_unmapped_sorted_bam:
             input:
                 unmapped_bam_unsorted_file = os.path.join(
                     config["output"]["host"],
-                    "starsolo_count/Aligned.out.unmapped.bam")
+                    "starsolo_count/Aligned_out_unmapped.bam")
             output:
                 unmapped_sorted_bam = os.path.join(
                     config["output"]["host"],
-                    "starsolo_count/Aligned.out.unmapped.RGsorted.bam"),
+                    "starsolo_count/Aligned_out_unmapped_RGsorted.bam"),
             params:
                 threads=40,
                 tag="RG"
@@ -578,11 +560,11 @@ if config["params"]["host"]["starsolo"]["do"]:
             input:
                 unmapped_sorted_bam = os.path.join(
                     config["output"]["host"],
-                    "starsolo_count/Aligned.out.unmapped.RGsorted.bam")
+                    "starsolo_count/Aligned_out_unmapped_RGsorted.bam")
             output:
                 unmapped_bam_demultiplex_dir = directory(os.path.join(
                     config["output"]["host"],
-                    "starsolo_count/unmapped_bam_RG_demultiplex/"))
+                    "unmapped_host/"))
             params:
                 threads = 40, # Number of threads
                 tag="RG"
@@ -602,7 +584,10 @@ if config["params"]["host"]["starsolo"]["do"]:
             input:
                 directory(os.path.join(
                     config["output"]["host"],
-                    "starsolo_count/unmapped_bam_RG_demultiplex/"))
+                    "unmapped_host/"))
+                # os.path.join(
+                #     config["output"]["host"],
+                #     "starsolo_count/Aligned_out_unmapped_RGsorted.bam")
         
     else:
         rule starsolo_smartseq_all:
@@ -694,35 +679,71 @@ if config["params"]["host"]["cellranger"]["do"]:
             ln -sr "{params.cr_out}{params.SampleID}/outs/possorted_genome_bam.bam" "{output.mapped_bam_file}";
             ln -sr "{params.cr_out}{params.SampleID}/outs/possorted_genome_bam.bam.bai" "{output.mapped_bam_index_file}";
             '''
+    # rule cellranger_unmapped_extracted:
+    #     input:
+    #         mapped_bam_file = os.path.join(
+    #         config["output"]["host"],
+    #         "cellranger_count/{sample}/{sample}_mappped2human_bam.bam")
+    #     output:
+    #         unmapped_bam_unsorted_file = os.path.join(
+    #         config["output"]["host"],
+    #         "unmapped_host/{sample}/{sample}_unmappped2human_unsorted_bam.bam")
+    #     shell:
+    #         '''
+    #         samtools view --threads  {threads}  -b -f 4   {input.mapped_bam_file}  >  {output.unmapped_bam_unsorted_file};
+    #         '''
     rule cellranger_unmapped_extracted:
         input:
             mapped_bam_file = os.path.join(
             config["output"]["host"],
             "cellranger_count/{sample}/{sample}_mappped2human_bam.bam")
         output:
-            unmapped_bam_unsorted_file = temp(os.path.join(
-            config["output"]["host"],
-            "cellranger_count/{sample}/{sample}_unmappped2human_sorted_bam.bam"))
-        shell:
-            '''
-            samtools view --threads  {threads}  -b -f 4   {input.mapped_bam_file}  >  {output.unmapped_bam_unsorted_file};
-            '''
-    rule cellranger_unmapped_sorted:
-        input:
-            unmapped_bam_unsorted_file = temp(os.path.join(
-            config["output"]["host"],
-            "cellranger_count/{sample}/{sample}_unmappped2human_sorted_bam.bam"))
-        output:
-            unmapped_bam_CBsorted_file = os.path.join(
-            config["output"]["host"],
-            "cellranger_count/{sample}/{sample}_unmappped2human_CB_sorted_bam.bam")
+            unmapped_bam_sorted_file = os.path.join(
+                config["output"]["host"],
+                "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam")
         params:
-            threads=40,
-            tag="CB"
+            threads=16,
+            unmapped_bam_unsorted_file = os.path.join(
+                config["output"]["host"],
+                "unmapped_host/{sample}/Aligned_sortedByCoord_unmapped_out.bam")
+        ## because bam is sorted by Coord,it's necessary to sort it by read name
         shell:
             '''
-            samtools sort -@ {params.threads} -t {params.tag} -o {output.unmapped_bam_CBsorted_file}  {input.unmapped_bam_unsorted_file};
+            samtools view --threads  {params.threads}  -b -f 4   {input.mapped_bam_file}  >  {params.unmapped_bam_unsorted_file};\
+            samtools sort -n  --threads  {params.threads} {params.unmapped_bam_unsorted_file} -o {output.unmapped_bam_sorted_file}
             '''
+    # rule cellranger_unmapped_sorted:
+    #     input:
+    #         unmapped_bam_unsorted_file = os.path.join(
+    #         config["output"]["host"],
+    #         "unmapped_host/{sample}/{sample}_unmappped2human_unsorted_bam.bam")
+    #     output:
+    #         unmapped_bam_CBsorted_file = os.path.join(
+    #         config["output"]["host"],
+    #         "unmapped_host/{sample}/{sample}_unmappped2human_CB_sorted_bam.bam")
+    #     params:
+    #         threads=40,
+    #         tag="CB"
+    #     shell:
+    #         '''
+    #         samtools sort -@ {params.threads} -t {params.tag} -o {output.unmapped_bam_CBsorted_file}  {input.unmapped_bam_unsorted_file};
+    #         '''
+    # rule cellranger_unmapped_sorted:
+    #     input:
+    #         unmapped_bam_unsorted_file = os.path.join(
+    #         config["output"]["host"],
+    #         "unmapped_host/{sample}/{sample}_unmappped2human_unsorted_bam.bam")
+    #     output:
+    #         unmapped_bam_CBsorted_file = os.path.join(
+    #         config["output"]["host"],
+    #         "unmapped_host/{sample}/{sample}_unmappped2human_CB_sorted_bam.bam")
+    #     params:
+    #         threads=40,
+    #         tag="CB"
+    #     shell:
+    #         '''
+    #         samtools sort -@ {params.threads} -t {params.tag} -o {output.unmapped_bam_CBsorted_file}  {input.unmapped_bam_unsorted_file};
+    #         '''
     #since output barcode.bam is unknown, here we use checkpoint
     # checkpoint cellranger_unmapped_demultiplex:
     #     input:
@@ -779,17 +800,11 @@ if config["params"]["host"]["cellranger"]["do"]:
 
     rule cellranger_all:
         input:
-            expand(os.path.join(
-            config["output"]["host"],
-            "cellranger_count/{sample}/{sample}_unmappped2human_CB_sorted_bam.bam"),sample=SAMPLES_ID_LIST)
+            expand(os.path.join(config["output"]["host"],"unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam"),sample=SAMPLES_ID_LIST)
 
 else:
     rule cellranger_all:
         input:
-
-                
-
-
 
 rule host_all:
     input:
