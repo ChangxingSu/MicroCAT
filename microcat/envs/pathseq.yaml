@@ -4,4 +4,4 @@ channels:
   - defaults
 dependencies:
   - gatk4=4.4.0.0
-  - pandas
+  - openjdk=17.0 #for gatk4.4,java version need to be >17 <18

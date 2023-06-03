@@ -38,6 +38,7 @@ params:
       host_bwa_image: /data/database/pathseq_database/ref201_CSI/pathseq_host.fa.img
       threads: 24
       mem_mb: 200000
+    pathseqscore: ""
     krakenuniq:
       do: false
       krakenuniq_database: "/data/database/krakenuniq_database/EuPathDB46/"

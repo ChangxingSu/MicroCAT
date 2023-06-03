@@ -122,6 +122,8 @@ if config["params"]["host"]["starsolo"]["do"]:
                     mapped_bam_file = os.path.join(
                         config["output"]["host"],
                         "starsolo_count/{sample}/Aligned_sortedByCoord_out.bam")
+                resources:
+                    mem_mb=100000  # This rule needs 100 GB of memory
                 params:
                     barcode_reads = lambda wildcards: sample.get_starsolo_sample_id(SAMPLES, wildcards, "fq1"),
                     cdna_reads = lambda wildcards: sample.get_starsolo_sample_id(SAMPLES, wildcards, "fq2"),
@@ -144,12 +146,11 @@ if config["params"]["host"]["starsolo"]["do"]:
                     cd {params.starsolo_out} ;
                     STAR \
                     --soloType CB_UMI_Simple \
-                    --soloCBwhitelist ../data/3M-february-2018.txt \
+                    --soloCBwhitelist /data/project/host-microbiome/microcat/microcat/data/3M-february-2018.txt \
                     --soloCBstart 1 \
                     --soloCBlen 16 \
                     --soloUMIstart 17 \
                     --soloUMIlen 12 \
-                    --soloBarcodeReadLength 150 \
                     --genomeDir {params.reference} \
                     --readFilesIn {params.cdna_reads} {params.barcode_reads} \
                     --runThreadN {params.threads} \
@@ -157,10 +158,9 @@ if config["params"]["host"]["starsolo"]["do"]:
                     --outFilterScoreMin 30 \
                     --soloCBmatchWLtype 1MM_multi_Nbase_pseudocounts \
                     --soloUMIfiltering MultiGeneUMI_CR \
-                    --outSAMtype BAM Unsorted\
+                    --outSAMtype BAM SortedByCoordinate\
                     --outSAMattrRGline ID:{wildcards.sample} PL:illumina SM:{wildcards.sample} LB:tenX_v3 \
                     --outSAMattributes NH HI AS nM CB UB CR CY UR UY GX GN \
-                    --readFilesCommand zcat \
                     --soloUMIdedup 1MM_CR \
                     --outSAMunmapped Within \
                     --outFileNamePrefix ./{wildcards.sample}/\
@@ -171,7 +171,7 @@ if config["params"]["host"]["starsolo"]["do"]:
                     ln -sr "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/filtered/features.tsv" "{output.features_file}" ;
                     ln -sr "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/filtered/matrix.mtx" "{output.matrix_file}" ; 
                     ln -sr "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/filtered/barcodes.tsv" "{output.barcodes_file}" ;\
-                    mv "{params.starsolo_out}/{wildcards.sample}/Aligned.out.bam" "{output.mapped_bam_file}";\
+                    mv "{params.starsolo_out}/{wildcards.sample}/Aligned.sortedByCoord.out.bam" "{output.mapped_bam_file}";\
                     '''        
         if config["params"]["host"]["starsolo"]["assay"]=="tenX_v1":
             rule starsolo_10x_count:

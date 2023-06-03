@@ -180,6 +180,8 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
                             "rmhost_kraken2uniq/{sample}_kraken2uniq_classifier_extracted_benchmark.log")
         conda:
             config["envs"]["kraken2"]
+        priority: 
+            13
         shell:
             '''
             python /data/scRNA/test-10x/scripts/extract_kraken_reads.py \
@@ -213,6 +215,8 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
                         "rmhost_kraken2uniq_extracted/{sample}_kraken2uniq_classifier_report_extracted.log")
         threads:
             8
+        priority: 
+            14
         shell:
             '''
             pwd
@@ -223,7 +227,7 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
             --extract_file {output.krak2_extracted_output}\
             --cores {threads} \
             --ntaxid 6000 \
-            2> >(tee {log})
+            2>&1 | tee {log};
             '''
 
     rule k_mer_test:
@@ -250,6 +254,8 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
         log:
             os.path.join(config["logs"]["classifier"],
                         "classified_qc/kmer_UMI/{sample}_kraken2uniq_sckmer.log")
+        priority: 
+            15
         params:
             cb_len = config["params"]["classifier"]["sckmer"]["cb_len"],
             umi_len = config["params"]["classifier"]["sckmer"]["umi_len"],
@@ -270,7 +276,7 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
             --nsample {params.nsample} \
             --kmer_file {output.krak2_sckmer_output} \
             --kmer_test_file {output.krak2_sckmer_test_output} \
-            2> >(tee {log})
+            2>&1 | tee {log};
             '''
     rule sample_denosing:
         input:
@@ -281,6 +287,8 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
             krak2_sample_denosing = os.path.join(
                                 config["output"]["classifier"],
                                 "rmhost_classified_qc/kmer_UMI/{sample}/{sample}_sample_denosing.txt"),
+        priority: 
+            16
         params:
             krak2_report_dir = os.path.join(
                 config["output"]["classifier"],
@@ -308,6 +316,8 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
             krak2_output_denosing = os.path.join(
                 config["output"]["classifier"],
                 "rmhost_classified_qc/kmer_UMI/{sample}/{sample}_kraken2_output_denosing.txt"),
+        priority: 
+            17
         shell:
             '''
             Rscript /data/scRNA/test-10x/scripts/krak2_output_denosing.R \
@@ -330,6 +340,8 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
             threads = 20,
             matrix_outdir = os.path.join(config["output"]["classifier"],
                 "microbiome_matrix_build/{sample}/"),
+        priority: 
+            18
         log:
             os.path.join(config["logs"]["classifier"],
                         "microbiome_matrix_build/{sample}_matrix.log")
@@ -490,7 +502,10 @@ if config["params"]["classifier"]["pathseq"]["do"]:
             microbe_bwa_image = config["params"]["classifier"]["pathseq"]["microbe_bwa_image"],
             microbe_dict_file = config["params"]["classifier"]["pathseq"]["microbe_dict"],
             host_hss_file = config["params"]["classifier"]["pathseq"]["host_bfi"],
-            taxonomy_db = config["params"]["classifier"]["pathseq"]["taxonomy_db"]
+            taxonomy_db = config["params"]["classifier"]["pathseq"]["taxonomy_db"],
+            pathseq_output_dir = os.path.join(
+                config["output"]["classifier"],
+                "pathseq_classified_output/{sample}/")
         resources:
             mem_mb=config["params"]["classifier"]["pathseq"]["mem_mb"]
         priority: 12
@@ -506,6 +521,7 @@ if config["params"]["classifier"]["pathseq"]["do"]:
                         "rmhost_pathseq/{sample}_pathseq_classifier.log")
         shell:
             '''
+            mkdir -p {params.pathseq_output_dir};\
             gatk PathSeqPipelineSpark \
             --filter-duplicates false \
             --min-score-identity .7 \
@@ -522,25 +538,123 @@ if config["params"]["classifier"]["pathseq"]["do"]:
             --java-options "-Xmx200g" \
             2>&1 | tee {log}\
             '''
+    rule pathseq_extract_paired_bam:
+        input:
+            pathseq_classified_bam_file = os.path.join(
+                config["output"]["classifier"],
+                "pathseq_classified_output/{sample}/{sample}_pathseq_classified.bam"),
+        output:
+            pathseq_classified_paired_bam_file = temp(os.path.join(
+                config["output"]["classifier"],
+                "pathseq_classified_output/{sample}/{sample}_pathseq_paired_classified.bam"))
+        params:
+            threads=8
+        shell:
+            '''
+            samtools view --threads {params.threads} -h -b -f 1 -o {output.pathseq_classified_paired_bam_file} {input.pathseq_classified_bam_file}
+            '''
+    rule pathseq_sort_extract_paired_bam:
+        input:
+            pathseq_classified_paired_bam_file = temp(os.path.join(
+                config["output"]["classifier"],
+                "pathseq_classified_output/{sample}/{sample}_pathseq_paired_classified.bam")),
+        output:
+            pathseq_classified_paired_sorted_bam_file = temp(os.path.join(
+                config["output"]["classifier"],
+                "pathseq_classified_output/{sample}/{sample}_pathseq_sorted_paired_classified.bam"))
+        params:
+            threads = 8
+        shell:
+            '''
+            samtools sort --threads {params.threads} -n -o {output.pathseq_classified_paired_sorted_bam_file} {input.pathseq_classified_paired_bam_file} 
+            '''
+    rule pathseq_extract_unpaired_bam:
+        input:
+            pathseq_classified_bam_file = os.path.join(
+                config["output"]["classifier"],
+                "pathseq_classified_output/{sample}/{sample}_pathseq_classified.bam"),
+        output:
+            pathseq_classified_unpaired_bam_file = temp(os.path.join(
+                config["output"]["classifier"],
+                "pathseq_classified_output/{sample}/{sample}_pathseq_unpaired_classified.bam"))
+        params:
+            threads=8
+        shell:
+            '''
+            samtools view --threads {params.threads} -h -b -F 1 -o {output.pathseq_classified_unpaired_bam_file} {input.pathseq_classified_bam_file}
+            '''
 
+    rule pathseq_score_cell_BAM:
+        input:
+            pathseq_classified_paired_sorted_bam_file = os.path.join(
+                config["output"]["classifier"],
+                "pathseq_classified_output/{sample}/{sample}_pathseq_sorted_paired_classified.bam"),
+            pathseq_classified_unpaired_bam_file = os.path.join(
+                config["output"]["classifier"],
+                "pathseq_classified_output/{sample}/{sample}_pathseq_unpaired_classified.bam")
+        output:
+            pathseq_classified_score_output = os.path.join(
+                config["output"]["classifier"],
+                "pathseq_classified_output/{sample}/{sample}_pathseq_output.txt")
+        params:
+            taxonomy_db = config["params"]["classifier"]["pathseq"]["taxonomy_db"],
+            pathseqscore_other_params = config["params"]["classifier"]["pathseqscore"] 
+        resources:
+            mem_mb=16000
+        conda:
+            config["envs"]["pathseq"]
+        benchmark:
+            os.path.join(config["benchmarks"]["classifier"],
+                        "rmhost_pathseq_score/{sample}_pathseq_classifier_score_benchmark.log")
+        log:
+            os.path.join(config["logs"]["classifier"],
+                        "rmhost_pathseq_score/{sample}_pathseq_classifier_score.log")
+        shell:
+            '''
+            gatk PathSeqScoreSpark \
+            --min-score-identity .7 \
+            --unpaired-input {input.pathseq_classified_unpaired_bam_file} \
+            --paired-input {input.pathseq_classified_paired_sorted_bam_file}\
+            --taxonomy-file {params.taxonomy_db} \
+            --scores-output {output.pathseq_classified_score_output} \
+            --java-options "-Xmx15g -Xms15G" \
+            --conf spark.port.maxRetries=64 \
+            {params.pathseqscore_other_params}\
+            2>&1 | tee {log}; \
+            '''
+        
     rule pathseq_classified_all:
         input:   
+            # expand(os.path.join(
+            #     config["output"]["classifier"],
+            #     "pathseq_classified_output/{sample}/{sample}_pathseq_classified.bam"),sample=SAMPLES_ID_LIST),
+            # expand(os.path.join(
+            #     config["output"]["classifier"],
+            #     "pathseq_classified_output/{sample}/{sample}_pathseq_classified.txt"),sample=SAMPLES_ID_LIST),
+            # expand(os.path.join(
+            #     config["output"]["classifier"],
+            #     "pathseq_classified_output/{sample}/{sample}_pathseq_filter_metrics.txt"),sample=SAMPLES_ID_LIST),
+            # expand(os.path.join(
+            #     config["output"]["classifier"],
+            #     "pathseq_classified_output/{sample}/{sample}_pathseq_score_metrics.txt"),sample=SAMPLES_ID_LIST)
             expand(os.path.join(
                 config["output"]["classifier"],
-                "pathseq_classified_output/{sample}/{sample}_pathseq_classified.bam"),sample=SAMPLES_ID_LIST),
-            expand(os.path.join(
-                config["output"]["classifier"],
-                "pathseq_classified_output/{sample}/{sample}_pathseq_classified.txt"),sample=SAMPLES_ID_LIST),
-            expand(os.path.join(
-                config["output"]["classifier"],
-                "pathseq_classified_output/{sample}/{sample}_pathseq_filter_metrics.txt"),sample=SAMPLES_ID_LIST),
-            expand(os.path.join(
-                config["output"]["classifier"],
-                "pathseq_classified_output/{sample}/{sample}_pathseq_score_metrics.txt"),sample=SAMPLES_ID_LIST)
+                "pathseq_classified_output/{sample}/{sample}_pathseq_output.txt"),sample=SAMPLES_ID_LIST)
 else:
     rule pathseq_classified_all:
         input:    
-        
+
+
+# if config["params"]["classifier"]["metaphlan"]["do"]:
+#     rule metaphlan_classified:
+#         input:  
+    
+#     rule metaphlan_classified_all:
+#         input:
+# else:
+#     rule metaphlan_classified_all:
+#         input:    
+
 rule classifier_all:
     input:
         rules.kraken2uniq_classified_all.input,
