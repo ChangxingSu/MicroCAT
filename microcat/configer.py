@@ -114,15 +114,28 @@ if you have environments:
                     continue
             # Copy the source file to the target file
             shutil.copyfile(os.path.join(self.envs_dir, i), dest_file)
-                
+        
+        overwrite_all = None
         # Iterate through the subdirectories of the profiles directory and copy them into the profiles subdirectory of the project directory
         for i in os.listdir(self.profiles_dir):
             dest_dir = os.path.join(self.work_dir, "profiles", i)
 
             # If the target directory already exists, output a prompt message and terminate the program
             if os.path.exists(dest_dir):
-                print(f"{dest_dir} exists, please remove or backup it first")
-                sys.exit(-1)
+                if overwrite_all is None:
+                    print(f"{dest_dir} already exists.")
+                    proceed = input("Do you want to overwrite it? (y/n/all/quit): ").lower()
+                    if proceed == 'n':
+                        print("Skip updating this file.")
+                        continue
+                    elif proceed == 'all':
+                        overwrite_all = True
+                    elif proceed == 'quit':
+                        print("Aborted.")
+                        sys.exit(1)
+                elif overwrite_all is False:
+                    print("Skip updating this dir.")
+                    continue
             # Otherwise copy the source directory to the target directory
             else:
                 shutil.copytree(os.path.join(self.profiles_dir, i), dest_dir)

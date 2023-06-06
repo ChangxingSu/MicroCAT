@@ -695,32 +695,35 @@ if config["params"]["host"]["cellranger"]["do"]:
     #         '''
     #         samtools view --threads  {threads}  -b -f 4   {input.mapped_bam_file}  >  {output.unmapped_bam_unsorted_file};
     #         '''
-    rule cellranger_unmapped_extracted:
+    # rule cellranger_unmapped_extracted:
+    #     input:
+    #         mapped_bam_file = os.path.join(
+    #         config["output"]["host"],
+    #         "cellranger_count/{sample}/{sample}_mappped2human_bam.bam")
+    #     output:
+    #         unmapped_bam_unsorted_file = os.path.join(
+    #         config["output"]["host"],
+    #         "cellranger_count/{sample}/{sample}_unmappped2human_sorted_bam.bam")
+    #     threads: 
+    #         16
+    #     resources:
+    #         mem_mb=16384
+    #     shell:
+    #         '''
+    #         samtools view --threads  {threads}  -b -f 4   {input.mapped_bam_file}  >  {output.unmapped_bam_unsorted_file};
+    #         '''
+    rule cellranger_unmapped_extracted_sorted:
         input:
+            # unmapped_bam_unsorted_file = os.path.join(
+            # config["output"]["host"],
+            # "cellranger_count/{sample}/{sample}_unmappped2human_sorted_bam.bam")
             mapped_bam_file = os.path.join(
             config["output"]["host"],
             "cellranger_count/{sample}/{sample}_mappped2human_bam.bam")
         output:
-            unmapped_bam_unsorted_file = os.path.join(
-            config["output"]["host"],
-            "cellranger_count/{sample}/{sample}_unmappped2human_sorted_bam.bam")
-        threads: 
-            16
-        resources:
-            mem_mb=16384
-        shell:
-            '''
-            samtools view --threads  {threads}  -b -f 4   {input.mapped_bam_file}  >  {output.unmapped_bam_unsorted_file};
-            '''
-    rule cellranger_unmapped_sorted:
-        input:
-            unmapped_bam_unsorted_file = os.path.join(
-            config["output"]["host"],
-            "cellranger_count/{sample}/{sample}_unmappped2human_sorted_bam.bam")
-        output:
-            unmapped_bam_CBsorted_file = os.path.join(
-            config["output"]["host"],
-            "cellranger_count/{sample}/{sample}_unmappped2human_CB_sorted_bam.bam")
+            unmapped_bam_sorted_file = os.path.join(
+                    config["output"]["host"],
+                    "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam")
         params:
             threads=16,
             unmapped_bam_unsorted_file = os.path.join(
@@ -820,9 +823,9 @@ if config["params"]["host"]["cellranger"]["do"]:
 
     rule cellranger_all:
         input:
-            expand(os.path.join(
-            config["output"]["host"],
-            "cellranger_count/{sample}/{sample}_unmappped2human_sorted_bam.bam"),sample=SAMPLES_ID_LIST)
+            expand( os.path.join(
+                    config["output"]["host"],
+                    "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam"),sample=SAMPLES_ID_LIST)
 
 else:
     rule cellranger_all:

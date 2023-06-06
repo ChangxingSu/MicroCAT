@@ -13,12 +13,12 @@ params:
   host:
     cellranger:
       do: false
-      reference: "/data/med-sucx/databases/10x_refdata-gex-GRCh38-2020-A/refdata-gex-GRCh38-2020-A/"
+      reference: "/data/database/refdata-gex-GRCh38-2020-A"
       variousParams: ""
       threads: 40
     starsolo:
       do: True
-      reference: "/data/database/STAR_microbiome/Mycobacterium_canettii/"
+      reference: "/data/database/STAR_refdata-gex-GRCh38-2020-A"
       variousParams: ""
       assay: tenX_v3
       threads: 40
@@ -39,9 +39,19 @@ params:
       threads: 24
       mem_mb: 200000
     pathseqscore: ""
+    
+    metaphlan:
+      do: false
+      threads: 24
+      sequence_type: fastq
+      analysis_type: "rel_ab_w_read_stats"
+      bowtie2db: "/data/database/metaphlan_database/"
+      db_index: "mpa_vOct22_CHOCOPhlAnSGB_202212"
+      metaphlan_other_params: ''
+
     krakenuniq:
       do: false
-      krakenuniq_database: "/data/database/krakenuniq_database/EuPathDB46/"
+      krakenuniq_database: "/data/database/krakenuniq_database/krakuniq_refseqV218/"
       threads: 40
       estimate_precision: 12
       mem_mb: 200000
@@ -74,4 +84,5 @@ envs:
   kraken2: ../envs/kraken2.yaml
   krakenuniq: ../envs/krakenuniq.yaml
   pathseq: ../envs/pathseq.yaml
+  metaphlan: ../envs/metaphlan.yaml
 

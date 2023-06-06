@@ -206,6 +206,7 @@ def get_fastqs_dir(SAMPLES, wildcards):
 
     try:
         fastqs_dir = SAMPLES.loc[sample_id,"fastqs_dir"]
+        fastqs_dir = fastqs_dir.unique()
     except KeyError:
         raise ValueError(f"Sample ID '{sample_id}' not found fastqs_dir in SAMPLES DataFrame.")
     return fastqs_dir

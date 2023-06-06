@@ -644,19 +644,85 @@ else:
     rule pathseq_classified_all:
         input:    
 
+if config["params"]["classifier"]["metaphlan"]["do"]:
+    rule metaphlan_classified:
+        input:  
+            unmapped_fastq = os.path.join(
+                            config["output"]["host"],
+                            "unmapped_host/{sample}/{sample}_unmappped2human_bam.fastq")
+        output:
+            mpa_bowtie2_out=os.path.join(
+                config["output"]["classifier"],
+                "metaphlan4_classified_output/{sample}/{sample}_metphlan4_classifier_bowtie2.bz2"),
+            mpa_profile_out=os.path.join(
+                config["output"]["classifier"],
+                "metaphlan4_classified_output/{sample}/{sample}_metphlan4_classifier_profile.txt"),
+        params:
+            threads = config["params"]["classifier"]["metaphlan"]["threads"],
+            sequence_type = config["params"]["classifier"]["metaphlan"]["sequence_type"],
+            bowtie2db = config["params"]["classifier"]["metaphlan"]["bowtie2db"],
+            db_index = config["params"]["classifier"]["metaphlan"]["db_index"],
+            analysis_type = config["params"]["classifier"]["metaphlan"]["analysis_type"],
+            metaphlan_other_params = config["params"]["classifier"]["metaphlan"]["metaphlan_other_params"] 
+        benchmark:
+            os.path.join(config["benchmarks"]["classifier"],
+                        "rmhost_metaphlan_classifier/{sample}/{sample}_metaphalan4_classifier_benchmark.log")
+        log:
+            os.path.join(config["logs"]["classifier"],
+                        "rmhost_metaphlan_classifier/{sample}/{sample}_metaphalan4_classifier.log")
+        conda:
+            config["envs"]["metaphlan"]
+        resources:
+            mem_mb=40000
+        shell:
+            '''
+            metaphlan {input.unmapped_fastq} \
+            -t {params.analysis_type} \
+            --bowtie2out {output.mpa_bowtie2_out} \
+            -o {output.mpa_profile_out} \
+            --unclassified_estimation \
+            --nproc {params.threads} \
+            --input_type {params.sequence_type} \
+            --bowtie2db {params.bowtie2db}  \
+            --index {params.db_index} \
+            {params.metaphlan_other_params}\
+            2>&1 | tee {log}; \
+            '''
 
-# if config["params"]["classifier"]["metaphlan"]["do"]:
-#     rule metaphlan_classified:
-#         input:  
-    
-#     rule metaphlan_classified_all:
-#         input:
-# else:
-#     rule metaphlan_classified_all:
-#         input:    
+    # rule mergeprofiles:
+    #     input: 
+    #         expand(os.path.join(
+    #             config["output"]["classifier"],
+    #             "metaphlan4_classified_output/{sample}/{sample}_metphlan4_classifier_profile.txt"), sample=SAMPLES_ID_LIST)
+    #     output: 
+    #         merged_abundance_table = os.path.join(
+    #             config["output"]["classifier"],
+    #             "metaphlan4_classified_output/merged_abundance_table.txt"),
+    #         merged_species_abundance_table = os.path.join(
+    #             config["output"]["classifier"],
+    #             "metaphlan4_classified_output/merged_abundance_table_species.txt")
+    #     params: 
+    #         profiles=config["output_dir"]+"/metaphlan/*_profile.txt"
+    #     conda: "utils/envs/metaphlan4.yaml"
+    #     shell: """
+    #         python utils/merge_metaphlan_tables.py {params.profiles} > {output.o1}
+    #         grep -E "(s__)|(^ID)|(clade_name)|(UNKNOWN)|(UNCLASSIFIED)" {output.o1} | grep -v "t__"  > {output.o2}
+    #         """
+    rule metaphlan_classified_all:
+        input:
+            expand(os.path.join(
+                config["output"]["classifier"],
+                "metaphlan4_classified_output/{sample}/{sample}_metphlan4_classifier_bowtie2.bz2"),sample=SAMPLES_ID_LIST),
+            expand(os.path.join(
+                config["output"]["classifier"],
+                "metaphlan4_classified_output/{sample}/{sample}_metphlan4_classifier_profile.txt"),sample=SAMPLES_ID_LIST)
+else:
+    rule metaphlan_classified_all:
+        input:    
 
 rule classifier_all:
     input:
         rules.kraken2uniq_classified_all.input,
         rules.krakenuniq_classified_all.input,
-        rules.pathseq_classified_all.input
+        rules.pathseq_classified_all.input,
+        rules.metaphlan_classified_all.input

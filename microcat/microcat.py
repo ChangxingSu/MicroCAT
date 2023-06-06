@@ -30,7 +30,7 @@ def update_config_tools(conf, host, classifier,assay=None):
         else:
             conf["params"]["host"][hoster_]["do"] = False
 
-    for classifier_ in ["kraken2uniq","krakenuniq","pathseq"]:
+    for classifier_ in ["kraken2uniq","krakenuniq","pathseq","metaphlan"]:
         if classifier_ in classifier:
             conf["params"]["classifier"][classifier_]["do"] = True
         else:
@@ -459,7 +459,7 @@ def main():
         nargs="+",
         required=False,
         default="kraken2uniq",
-        choices=["kraken2uniq","krakenuniq","pathseq"],
+        choices=["kraken2uniq","krakenuniq","pathseq","metaphlan"],
         help="wchich classifier used",
     )
 
