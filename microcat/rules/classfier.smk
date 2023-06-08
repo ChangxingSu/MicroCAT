@@ -372,7 +372,7 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
             config["envs"]["kmer_python"]
         shell:
             '''
-            python {kraken2sc_script} \
+            python {params.kraken2sc_script} \
             --bam {input.unmapped_bam_sorted_file} \
             --kraken_output {input.krak2_output_denosing}  \
             --dbfile {params.database} \
