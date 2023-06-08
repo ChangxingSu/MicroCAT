@@ -12,6 +12,14 @@ WORKFLOWS_MAG = [
     "host_all",
     "check_all",]
 
+WORKFLOWS_SCRNA = [
+    "host_all",
+    "kraken2uniq_classified_all",
+    "krakenuniq_classified_all",
+    "pathseq_classified_all",
+    "metaphlan_classified_all",
+    "classifier_all",]
+
 def update_config_tools(conf, host, classifier,assay=None):
     conf["params"]["simulate"]["do"] = False
     # conf["params"]["begin"] = begin
@@ -130,6 +138,8 @@ def run_snakemake(args, unknown, snakefile, workflow):
         args.config,
         "--cores",
         str(args.cores),
+        "--until",
+        args.task
     ] + unknown
 
     # Add specific flags to the command based on the input arguments
@@ -505,15 +515,15 @@ def main():
             choices=["10x", "smart-seq2"],
             help="single cell sequencing platform,support 10x and smart-seq2",
         )
-    # parser_scrna_wf.add_argument(
-    #     "task",
-    #     metavar="TASK",
-    #     nargs="?",
-    #     type=str,
-    #     default="all",
-    #     choices=WORKFLOWS_MAG,
-    #     help="pipeline end point. Allowed values are " + ", ".join(WORKFLOWS_MAG),
-    # )
+    parser_scrna_wf.add_argument(
+        "task",
+        metavar="TASK",
+        nargs="?",
+        type=str,
+        default="all",
+        choices=WORKFLOWS_SCRNA,
+        help="pipeline end point. Allowed values are " + ", ".join(WORKFLOWS_MAG),
+    )
     parser_scrna_wf.set_defaults(func=scRNA_wf)
 
     args, unknown = parser.parse_known_args()
