@@ -31,7 +31,7 @@ python /data/project/host-microbiome/kraken_metaphlan_comparison/database_buildi
 python /data/project/host-microbiome/kraken_metaphlan_comparison/database_building_scripts/get_ncbi_other_domains.py --domain protozoa --complete True --folder  /data/database/RefseqV218_download/protozoa --download_genomes True --log_file /data/database/RefseqV218_download/run_protozoa_download.log --processors 40
 
 
-    samtools faidx microbiome_RefseqV218_Compelete-Chromon.fna
+    samtools faidx microbiome_RefseqV218_Compelete-Chromon.fasta
 
 gunzip -c ./*.fna.gz >>../microbiome_RefseqV218_Compelete-Chromon.fna
 
@@ -64,3 +64,17 @@ rule BuildBwaMemIndexImage:
         """
 
         gatk BwaMemIndexImageCreator -I /data/database/RefseqV218_download/microbiome_RefseqV218_Compelete-Chromon.fasta --output /data/database/pathseq_database/refv218/microbiome_RefseqV218_Compelete-Chromon.fasta.img
+
+ftp://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump.tar.gz
+ftp://ftp.ncbi.nlm.nih.gov/refseq/release/release-catalog/RefSeq-release218.catalog.gz
+
+gatk PathSeqBuildReferenceTaxonomy \
+    -R /data/database/RefseqV218_download/microbiome_RefseqV218_Compelete-Chromon.fasta \
+    --refseq-catalog /data/database/pathseq_database/refv218/RefSeq-release218.catalog.gz \
+    --min-non-virus-contig-length 2000\
+    --tax-dump /data/database/pathseq_database/refv218/taxdump.tar.gz \
+    -O /data/database/pathseq_database/refv218/microbiome_RefseqV218_Compelete-Chromon.db
+
+
+ln -s
+gatk CreateSequenceDictionary R=/data/database/RefseqV218_download/microbiome_RefseqV218_Compelete-Chromon.fasta O=/data/database/pathseq_database/refv218/microbiome_RefseqV218_Compelete-Chromon.dict

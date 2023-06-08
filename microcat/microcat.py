@@ -78,6 +78,11 @@ def init(args, unknown):
         for env_name in conf["envs"]:
             conf["envs"][env_name] = os.path.join(os.path.realpath(args.workdir), f"envs/{env_name}.yaml")
 
+
+        for script_path in conf["scripts"]:
+            origin_path = conf["scripts"][script_path]
+            conf["scripts"][script_path] = os.path.join(os.path.dirname(__file__),f"{origin_path}")
+
         # Update the configuration with the selected tools
         conf = update_config_tools(
             conf,args.host,args.classifier,args.assay

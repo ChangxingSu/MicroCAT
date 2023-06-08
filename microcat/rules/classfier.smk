@@ -90,6 +90,8 @@ rule paired_bam_to_fastq:
     resources:
         mem_mb=100000
     priority: 11
+    conda:
+        config["envs"]["star"]
     shell:
         '''
         samtools fastq --threads {threads}  -n {input.unmapped_bam_sorted_file}  > {output.unmapped_fastq}
@@ -123,6 +125,7 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
                 "rmhost_kraken2_report/mpa/{sample}/{sample}_kraken2_mpa_report.txt")
         params:
             database = config["params"]["classifier"]["kraken2uniq"]["kraken2_database"],
+            kraken2mpa_script = config["scripts"]["kraken2mpa"]
             #since kraken2 acquire specific input fomrat "#fq",so we put it it params
             # krak2_classified_output=os.path.join(
             #     config["output"]["classifier"],
@@ -130,6 +133,7 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
             # krak2_unclassified_output=os.path.join(
             #     config["output"]["classifier"],
             #     "unclassified_output/{sample}/{sample}_kraken2_unclassified#.fq")
+
         resources:
             mem_mb=config["params"]["classifier"]["kraken2uniq"]["mem_mb"]
         priority: 12
@@ -141,6 +145,8 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
         log:
             os.path.join(config["logs"]["classifier"],
                         "rmhost_kraken2uniq/{sample}_kraken2uniq_classifier.log")
+        conda:
+            config["envs"]["kraken2"]
         shell:
             '''
             kraken2 --db {params.database} \
@@ -155,7 +161,7 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
             --memory-mapping \
             2>&1 | tee {log};\
             cut -f 1-3,6-8 {output.krak2_report} > {output.krak2_std_report};\
-            python /data/scRNA/test-10x/scripts/kraken2mpa.py -r {output.krak2_std_report} -o {output.krak2_mpa_report};
+            python {params.kraken2mpa_script} -r {output.krak2_std_report} -o {output.krak2_mpa_report};
             '''
     rule extract_kraken2_reads:
         input:
@@ -178,13 +184,15 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
         benchmark:
             os.path.join(config["benchmarks"]["classifier"],
                             "rmhost_kraken2uniq/{sample}_kraken2uniq_classifier_extracted_benchmark.log")
+        params:
+            extract_kraken_reads_script = config["scripts"]["extract_kraken_reads"]
         conda:
-            config["envs"]["kraken2"]
+            config["envs"]["kmer_qc"]
         priority: 
             13
         shell:
             '''
-            python /data/scRNA/test-10x/scripts/extract_kraken_reads.py \
+            python {params.extract_kraken_reads_script} \
             -k {input.krak2_output} \
             -s1 {input.krak2_classified_output_fq} \
             --report {input.krak2_report}\
@@ -213,14 +221,18 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
         log:
             os.path.join(config["logs"]["classifier"],
                         "rmhost_kraken2uniq_extracted/{sample}_kraken2uniq_classifier_report_extracted.log")
+        params:
+            extract_microbiome_output_script = config["scripts"]["extract_microbiome_output"]
         threads:
             8
         priority: 
             14
+        conda:
+            config["envs"]["kmer_qc"]
         shell:
             '''
             pwd
-            Rscript /data/scRNA/test-10x/scripts/extract_microbiome_output.R \
+            Rscript {params.extract_microbiome_output_script} \
             --output_file {input.krak2_output} \
             --kraken_report {input.krak2_report} \
             --mpa_report {input.krak2_mpa_report} \
@@ -261,10 +273,13 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
             umi_len = config["params"]["classifier"]["sckmer"]["umi_len"],
             min_frac = config["params"]["classifier"]["sckmer"]["min_frac"],
             kmer_len = config["params"]["classifier"]["sckmer"]["kmer_len"],
-            nsample = config["params"]["classifier"]["sckmer"]["nsample"]
+            nsample = config["params"]["classifier"]["sckmer"]["nsample"],
+            sckmer_unpaired_script= config["scripts"]["sckmer_unpaired"]
+        conda:
+            config["envs"]["kmer_qc"]
         shell:
             '''
-            Rscript /data/scRNA/test-10x/scripts/sckmer_unpaired.R \
+            Rscript {params.sckmer_unpaired_script} \
             --fa1 {input.krak2_extracted_output_fq} \
             --microbiome_output_file {input.krak2_extracted_output} \
             --cb_len {params.cb_len} \
@@ -294,9 +309,12 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
                 config["output"]["classifier"],
                 "rmhost_kraken2_report/custom/"),
             SampleID="{sample}",
+            sample_denosing_script= config["scripts"]["sample_denosing"]
+        conda:
+            config["envs"]["kmer_qc"]
         shell:
             '''
-            Rscript  /home/microcat-sucx/project/scRNA-analysis/Lee2020/scripts/sample_denosing.R\
+            Rscript  {params.sample_denosing_script}\
             --path {params.krak2_report_dir} \
             --kmer_data {input.krak2_sckmer_test_output} \
             --out_path {output.krak2_sample_denosing} \
@@ -316,11 +334,15 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
             krak2_output_denosing = os.path.join(
                 config["output"]["classifier"],
                 "rmhost_classified_qc/kmer_UMI/{sample}/{sample}_kraken2_output_denosing.txt"),
+        conda:
+            config["envs"]["kmer_qc"]
         priority: 
             17
+        params:
+            krak2_output_denosing_script = config["scripts"]["krak2_output_denosing"]
         shell:
             '''
-            Rscript /data/scRNA/test-10x/scripts/krak2_output_denosing.R \
+            Rscript {params.krak2_output_denosing_script} \
             --output_file {input.krak2_extracted_output} \
             --taxa {input.krak2_sample_denosing} \
             --out_krak2_denosing {output.krak2_output_denosing}
@@ -340,14 +362,17 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
             threads = 20,
             matrix_outdir = os.path.join(config["output"]["classifier"],
                 "microbiome_matrix_build/{sample}/"),
+            kraken2sc_script = config["scripts"]["kraken2sc"]
         priority: 
             18
         log:
             os.path.join(config["logs"]["classifier"],
                         "microbiome_matrix_build/{sample}_matrix.log")
+        conda:
+            config["envs"]["kmer_python"]
         shell:
             '''
-            python /data/scRNA/test-10x/scripts/kraken2sc.py \
+            python {kraken2sc_script} \
             --bam {input.unmapped_bam_sorted_file} \
             --kraken_output {input.krak2_output_denosing}  \
             --dbfile {params.database} \
@@ -549,6 +574,8 @@ if config["params"]["classifier"]["pathseq"]["do"]:
                 "pathseq_classified_output/{sample}/{sample}_pathseq_paired_classified.bam"))
         params:
             threads=8
+        conda:
+            config["envs"]["star"]
         shell:
             '''
             samtools view --threads {params.threads} -h -b -f 1 -o {output.pathseq_classified_paired_bam_file} {input.pathseq_classified_bam_file}
@@ -564,6 +591,8 @@ if config["params"]["classifier"]["pathseq"]["do"]:
                 "pathseq_classified_output/{sample}/{sample}_pathseq_sorted_paired_classified.bam"))
         params:
             threads = 8
+        conda:
+            config["envs"]["star"]
         shell:
             '''
             samtools sort --threads {params.threads} -n -o {output.pathseq_classified_paired_sorted_bam_file} {input.pathseq_classified_paired_bam_file} 
@@ -579,6 +608,8 @@ if config["params"]["classifier"]["pathseq"]["do"]:
                 "pathseq_classified_output/{sample}/{sample}_pathseq_unpaired_classified.bam"))
         params:
             threads=8
+        conda:
+            config["envs"]["star"]
         shell:
             '''
             samtools view --threads {params.threads} -h -b -F 1 -o {output.pathseq_classified_unpaired_bam_file} {input.pathseq_classified_bam_file}
@@ -622,7 +653,67 @@ if config["params"]["classifier"]["pathseq"]["do"]:
             {params.pathseqscore_other_params}\
             2>&1 | tee {log}; \
             '''
-        
+    rule pathseq_INVADESEQ:
+        input:
+            unmapped_bam_sorted_file =os.path.join(
+                config["output"]["host"],
+                "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam"),
+            features_file = os.path.join(
+                config["output"]["host"],
+                "cellranger_count/{sample}/{sample}_features.tsv"),
+            pathseq_classified_bam_file = os.path.join(
+                            config["output"]["classifier"],
+                            "pathseq_classified_output/{sample}/{sample}_pathseq_classified.bam"),
+            pathseq_output = os.path.join(
+                config["output"]["classifier"],
+                "pathseq_classified_output/{sample}/{sample}_pathseq_classified.txt")
+        output:
+            filtered_matrix_readname = os.path.join(
+                config["output"]["classifier"],
+                "pathseq_final_output/{sample}/{sample}_filtered_matrix_readname.txt"),
+            unmap_cbub_bam = os.path.join(
+                config["output"]["classifier"],
+                "pathseq_final_output/{sample}/{sample}_pathseq_unmap_cbub.bam"),
+            unmap_cbub_fasta = os.path.join(
+                config["output"]["classifier"],
+                "pathseq_final_output/{sample}/{sample}_pathseq_unmap_cbub.fasta"),
+            filtered_matrix_list= os.path.join(
+                config["output"]["classifier"],
+                "pathseq_final_output/{sample}/{sample}_pathseq_filtered_matrix_list.txt"),
+            matrix_readnamepath = os.path.join(
+                    config["output"]["classifier"],
+                    "pathseq_final_output/{sample}/{sample}_filtered_matrix.readnamepath"),
+            genus_cell = os.path.join(
+                    config["output"]["classifier"],
+                    "pathseq_final_output/{sample}/{sample}_genus_cell.txt"),
+            filtered_matrix_genus_csv = os.path.join(
+                    config["output"]["classifier"],
+                    "pathseq_final_output/{sample}/{sample}_filtered_matrix_genus.csv"),
+            filtered_matrix_validate = os.path.join(
+                    config["output"]["classifier"],
+                    "pathseq_final_output/{sample}/{sample}_filtered_matrix.validate.csv")
+        conda:
+            config["envs"]["kmer_python"]
+        params:
+            SampleID="{sample}",
+            INVADEseq_script = config["scripts"]["INVADEseq"]
+        shell:
+            '''
+            python {params.INVADEseq_script} \
+            {input.unmapped_bam_sorted_file} \
+            {params.SampleID} \
+            {input.features_file} \
+            {input.pathseq_classified_bam_file}\
+            {input.pathseq_output} \
+            {output.filtered_matrix_readname} \
+            {output.unmap_cbub_bam} \
+            {output.unmap_cbub_fasta} \
+            {output.filtered_matrix_list} \
+            {output.matrix_readnamepath} \
+            {output.genus_cell} \
+            {output.filtered_matrix_genus_csv} \
+            {output.filtered_matrix_validate}
+            '''
     rule pathseq_classified_all:
         input:   
             # expand(os.path.join(
@@ -637,9 +728,33 @@ if config["params"]["classifier"]["pathseq"]["do"]:
             # expand(os.path.join(
             #     config["output"]["classifier"],
             #     "pathseq_classified_output/{sample}/{sample}_pathseq_score_metrics.txt"),sample=SAMPLES_ID_LIST)
+            # expand(os.path.join(
+            #     config["output"]["classifier"],
+            #     "pathseq_classified_output/{sample}/{sample}_pathseq_output.txt"),sample=SAMPLES_ID_LIST)
             expand(os.path.join(
                 config["output"]["classifier"],
-                "pathseq_classified_output/{sample}/{sample}_pathseq_output.txt"),sample=SAMPLES_ID_LIST)
+                "pathseq_final_output/{sample}/{sample}_filtered_matrix_readname.txt"),sample=SAMPLES_ID_LIST),
+            expand(os.path.join(
+                config["output"]["classifier"],
+                "pathseq_final_output/{sample}/{sample}_pathseq_unmap_cbub.bam"),sample=SAMPLES_ID_LIST),
+            expand(os.path.join(
+                config["output"]["classifier"],
+                "pathseq_final_output/{sample}/{sample}_pathseq_unmap_cbub.fasta"),sample=SAMPLES_ID_LIST),
+            expand(os.path.join(
+                config["output"]["classifier"],
+                "pathseq_final_output/{sample}/{sample}_pathseq_filtered_matrix_list.txt"),sample=SAMPLES_ID_LIST),
+            expand(os.path.join(
+                    config["output"]["classifier"],
+                    "pathseq_final_output/{sample}/{sample}_filtered_matrix.readnamepath"),sample=SAMPLES_ID_LIST),
+            expand(os.path.join(
+                    config["output"]["classifier"],
+                    "pathseq_final_output/{sample}/{sample}_genus_cell.txt"),sample=SAMPLES_ID_LIST),
+            expand(os.path.join(
+                    config["output"]["classifier"],
+                    "pathseq_final_output/{sample}/{sample}_filtered_matrix_genus.csv"),sample=SAMPLES_ID_LIST),
+            expand(os.path.join(
+                    config["output"]["classifier"],
+                    "pathseq_final_output/{sample}/{sample}_filtered_matrix.validate.csv"),sample=SAMPLES_ID_LIST)
 else:
     rule pathseq_classified_all:
         input:    

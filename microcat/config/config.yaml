@@ -85,4 +85,20 @@ envs:
   krakenuniq: ../envs/krakenuniq.yaml
   pathseq: ../envs/pathseq.yaml
   metaphlan: ../envs/metaphlan.yaml
+  kmer_qc: ../envs/kmer_qc.yaml
+  kmer_python: ../envs/kmer_python.yaml
+  star: ../envs/star.yaml
 
+
+
+
+scripts:
+  extract_microbiome_output: scripts/extract_microbiome_output.R
+  kraken2mpa: scripts/kraken2mpa.py
+  kraken2sc: scripts/kraken2sc.py
+  extract_kraken_reads: scripts/extract_kraken_reads.py
+  krak2_output_denosing: scripts/krak2_output_denosing.R
+  sckmer_unpaired: scripts/sckmer_unpaired.R
+  spilt_bam_by_tag: scripts/spilt_bam_by_tag.py
+  sample_denosing: scripts/sample_denosing.R
+  INVADEseq: scripts/INVADEseq.py

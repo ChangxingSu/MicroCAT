@@ -139,6 +139,8 @@ if config["params"]["host"]["starsolo"]["do"]:
                 benchmark:
                     os.path.join(config["benchmarks"]["host"],
                                 "starsolo/{sample}_starsolo_count.benchmark")
+                conda:
+                    config["envs"]["star"]
                 message: "Executing starsolo with {params.threads} threads on the following files {wildcards.sample}.Library with 10x 3' V3"
                 shell:
                     '''
@@ -208,6 +210,8 @@ if config["params"]["host"]["starsolo"]["do"]:
                 benchmark:
                     os.path.join(config["benchmarks"]["host"],
                                 "starsolo/{sample}_starsolo_count.benchmark")
+                conda:
+                    config["envs"]["star"]
                 message: "Executing starsolo with {params.threads} threads on the following files {wildcards.sample}.Library with 10x 3' V1"
                 shell:
                     '''
@@ -280,6 +284,8 @@ if config["params"]["host"]["starsolo"]["do"]:
                 benchmark:
                     os.path.join(config["benchmarks"]["host"],
                                 "starsolo/{sample}_starsolo_count.benchmark")
+                conda:
+                    config["envs"]["star"]
                 resources:
                     threads=20,      # This rule needs 30 threads
                     mem_mb=100000  # This rule needs 100 GB of memory
@@ -332,6 +338,8 @@ if config["params"]["host"]["starsolo"]["do"]:
                     config["output"]["host"],
                     "unmapped_host/{sample}/Aligned_sortedByCoord_unmapped_out.bam")
             ## because bam is sorted by Coord,it's necessary to sort it by read name
+            conda:
+                config["envs"]["star"]
             shell:
                 '''
                 samtools view --threads  {params.threads}  -b -f 4   {input.mapped_bam_file}  >  {params.unmapped_bam_unsorted_file};\
@@ -492,6 +500,8 @@ if config["params"]["host"]["starsolo"]["do"]:
             benchmark:
                 os.path.join(config["benchmarks"]["host"],
                             "starsolo/starsolo_count_smartseq2.benchmark")
+            conda:
+                config["envs"]["star"]
             shell:
                 '''
                 mkdir -p {params.starsolo_out}; 
@@ -528,6 +538,8 @@ if config["params"]["host"]["starsolo"]["do"]:
                     "starsolo_count/Aligned_out_unmapped.bam")
             params:
                 threads=16
+            conda:
+                config["envs"]["star"]
             shell:
                 '''
                 samtools view --threads  {params.threads}  -b -f 4   {input.mapped_bam_file}  >  {output.unmapped_bam_unsorted_file};\
@@ -551,6 +563,8 @@ if config["params"]["host"]["starsolo"]["do"]:
             benchmark:
                 os.path.join(config["benchmarks"]["host"],
                             "starsolo/unmapped_sorted_bam.benchmark")
+            conda:
+                config["envs"]["star"]
             shell:
                 '''
                 samtools sort -@ {params.threads} -t {params.tag} -o {output.unmapped_sorted_bam}  {input.unmapped_bam_unsorted_file};
@@ -568,6 +582,8 @@ if config["params"]["host"]["starsolo"]["do"]:
             params:
                 threads = 40, # Number of threads
                 tag="RG"
+            conda:
+                config["envs"]["star"]
             log:
                 os.path.join(
                     config["logs"]["host"],
@@ -650,6 +666,8 @@ if config["params"]["host"]["cellranger"]["do"]:
         resources:
             mem_mb=102400,
             disk_mb=10000
+        conda:
+            config["envs"]["star"]
         log:
             os.path.join(config["logs"]["host"],
                         "cellranger/{sample}_cellranger_count.log")
@@ -730,6 +748,8 @@ if config["params"]["host"]["cellranger"]["do"]:
                 config["output"]["host"],
                 "unmapped_host/{sample}/Aligned_sortedByCoord_unmapped_out.bam")
         ## because bam is sorted by Coord,it's necessary to sort it by read name
+        conda:
+            config["envs"]["star"]
         shell:
             '''
             samtools view --threads  {params.threads}  -b -f 4   {input.mapped_bam_file}  >  {params.unmapped_bam_unsorted_file};\
@@ -835,8 +855,6 @@ rule host_all:
     input:
         rules.starsolo_all.input,
         rules.cellranger_all.input,
-
-    
 
 
 

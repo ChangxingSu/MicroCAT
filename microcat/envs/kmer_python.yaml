@@ -1,0 +1,15 @@
+name: kmer_python
+channels:
+  - defaults
+  - bioconda
+  - conda-forge
+  - pip
+dependencies:
+  - python=3.8
+  - biopython
+  - argparse
+  - scipy
+  - pysam
+  - regex
+  - pip:
+    - gzip
