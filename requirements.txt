@@ -1,0 +1,6 @@
+numpy
+pandas
+openpyxl
+snakemake >=7.0
+ruamel.yaml
+biopython >=1.73

@@ -1,9 +1,9 @@
-import pandas as pd
-import glob
-import os
-## beta test
-sys.path.append('/data/med-sucx/host-microbiome/MicroCAT/microcat/')
-import sample
+# import pandas as pd
+# import glob
+# import os
+# ## beta test
+
+# import sample
 
 
 def gather_fastq_files(wildcards):
@@ -106,7 +106,7 @@ if config["params"]["host"]["starsolo"]["do"]:
             rule starsolo_10x_count:
                 input:
                     # Directory containing input fastq files
-                    fastqs_dir=lambda wildcards: sample.get_fastqs_dir(SAMPLES,wildcards),
+                    fastqs_dir=lambda wildcards: microcat.get_fastqs_dir(SAMPLES,wildcards),
                 output:
                     # Path to the output features.tsv file
                     features_file = os.path.join(
@@ -125,8 +125,8 @@ if config["params"]["host"]["starsolo"]["do"]:
                 resources:
                     mem_mb=100000  # This rule needs 100 GB of memory
                 params:
-                    barcode_reads = lambda wildcards: sample.get_starsolo_sample_id(SAMPLES, wildcards, "fq1"),
-                    cdna_reads = lambda wildcards: sample.get_starsolo_sample_id(SAMPLES, wildcards, "fq2"),
+                    barcode_reads = lambda wildcards: microcat.get_starsolo_sample_id(SAMPLES, wildcards, "fq1"),
+                    cdna_reads = lambda wildcards: microcat.get_starsolo_sample_id(SAMPLES, wildcards, "fq2"),
                     starsolo_out = os.path.join(
                         config["output"]["host"],
                         "starsolo_count/"),
@@ -179,7 +179,7 @@ if config["params"]["host"]["starsolo"]["do"]:
             rule starsolo_10x_count:
                 input:
                     # Directory containing input fastq files
-                    fastqs_dir=lambda wildcards: sample.get_fastqs_dir(SAMPLES,wildcards),
+                    fastqs_dir=lambda wildcards: microcat.get_fastqs_dir(SAMPLES,wildcards),
                 output:
                     # Path to the output features.tsv file
                     features_file = os.path.join(
@@ -196,8 +196,8 @@ if config["params"]["host"]["starsolo"]["do"]:
                         config["output"]["host"],
                         "starsolo_count/{sample}/Aligned_sortedByCoord_out.bam")
                 params:
-                    barcode_reads = lambda wildcards: sample.get_starsolo_sample_id(SAMPLES, wildcards, "fq1"),
-                    cdna_reads = lambda wildcards: sample.get_starsolo_sample_id(SAMPLES, wildcards, "fq2"),
+                    barcode_reads = lambda wildcards: microcat.get_starsolo_sample_id(SAMPLES, wildcards, "fq1"),
+                    cdna_reads = lambda wildcards: microcat.get_starsolo_sample_id(SAMPLES, wildcards, "fq2"),
                     starsolo_out = os.path.join(
                         config["output"]["host"],
                         "starsolo_count/"),
@@ -253,7 +253,7 @@ if config["params"]["host"]["starsolo"]["do"]:
             rule starsolo_10x_count:
                 input:
                     # Directory containing input fastq files
-                    fastqs_dir=lambda wildcards: sample.get_fastqs_dir(SAMPLES,wildcards),
+                    fastqs_dir=lambda wildcards: microcat.get_fastqs_dir(SAMPLES,wildcards),
                 output:
                     # Path to the output features.tsv file
                     features_file = os.path.join(
@@ -276,8 +276,8 @@ if config["params"]["host"]["starsolo"]["do"]:
                     reference = config["params"]["host"]["starsolo"]["reference"],
                     variousParams = config["params"]["host"]["starsolo"]["variousParams"],
                     threads = config["params"]["host"]["starsolo"]["threads"],
-                    barcode_reads = lambda wildcards: sample.get_starsolo_sample_id(SAMPLES, wildcards, "fq1"),
-                    cdna_reads = lambda wildcards: sample.get_starsolo_sample_id(SAMPLES, wildcards, "fq2")
+                    barcode_reads = lambda wildcards: microcat.get_starsolo_sample_id(SAMPLES, wildcards, "fq1"),
+                    cdna_reads = lambda wildcards: microcat.get_starsolo_sample_id(SAMPLES, wildcards, "fq2")
                 log:
                     os.path.join(config["logs"]["host"],
                                 "starsolo/{sample}_starsolo_count.log")
@@ -455,7 +455,7 @@ if config["params"]["host"]["starsolo"]["do"]:
             input:
                 # Path to the input manifest file
                 manifest = config["params"]["host"]["starsolo"]["manifest"],
-                fastqs_dir=lambda wildcards: sample.get_fastqs_dir(SAMPLES,wildcards),
+                fastqs_dir=lambda wildcards: microcat.get_fastqs_dir(SAMPLES,wildcards),
             output:
                 # Path to the output features.tsv file
                 features_file = os.path.join(
@@ -489,7 +489,7 @@ if config["params"]["host"]["starsolo"]["do"]:
                 reference = config["params"]["host"]["starsolo"]["reference"],
                 # Type of sequencing library
                 soloType = config["params"]["host"]["starsolo"]["soloType"],
-                SAMattrRGline = sample.get_SAMattrRGline_from_manifest(config["params"]["host"]["starsolo"]["manifest"]),
+                SAMattrRGline = microcat.get_SAMattrRGline_from_manifest(config["params"]["host"]["starsolo"]["manifest"]),
                 # Additional parameters for STAR
                 variousParams = config["params"]["host"]["starsolo"]["variousParams"],
                 # Number of threads for STAR
@@ -626,7 +626,7 @@ if config["params"]["host"]["cellranger"]["do"]:
             # fastqs_dir = config["params"]["data_dir"],
             # r1 = lambda wildcards: get_sample_id(SAMPLES, wildcards, "fq1"),
             # r2 = lambda wildcards: get_sample_id(SAMPLES, wildcards, "fq2")
-            fastqs_dir=lambda wildcards: sample.get_fastqs_dir(SAMPLES,wildcards),
+            fastqs_dir=lambda wildcards: microcat.get_fastqs_dir(SAMPLES,wildcards),
         output:
             features_file = os.path.join(
                 config["output"]["host"],

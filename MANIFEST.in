@@ -1,0 +1,18 @@
+include *.md *.txt
+include LICENSE
+
+recursive-include microcat/ *
+recursive-include microcat/scripts *
+recursive-include microcat/rules *
+recursive-include microcat/snakefiles *
+recursive-include microcat/envs *
+recursive-include microcat/config *
+
+global-exclude microcat/ *.pyc
+global-exclude microcat/__pycache__ *.pyc
+global-exclude microcat/scripts/ *.pyc
+global-exclude microcat/data/*
+
+
+
+

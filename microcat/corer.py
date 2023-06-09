@@ -5,8 +5,9 @@ import subprocess
 import sys
 import textwrap
 from io import StringIO
-import configer
 import pandas as pd
+
+import microcat
 
 WORKFLOWS_MAG = [
     "host_all",
@@ -63,7 +64,7 @@ def init(args, unknown):
     # Check if the user provided a working directory
     if args.workdir:
         # Create a MicrocatConfig object using the provided working directory
-        project = configer.MicrocatConfig(args.workdir)
+        project = microcat.MicrocatConfig(args.workdir)
 
 
         # Check if the working directory already exists
@@ -104,7 +105,7 @@ def init(args, unknown):
             sys.exit(-1)
 
         # Update the configuration file
-        configer.update_config(
+        microcat.update_config(
             project.config_file, project.new_config_file, conf, remove=False
         )
 
@@ -122,7 +123,7 @@ def run_snakemake(args, unknown, snakefile, workflow):
         args (argparse.Namespace): An object containing parsed command-line arguments.
     """
     # Parse the YAML configuration file
-    conf = configer.parse_yaml(args.config)
+    conf = microcat.parse_yaml(args.config)
 
     # Check if the sample list is provided, exit if not
     if not os.path.exists(conf["params"]["samples"]):
@@ -421,7 +422,7 @@ def main():
     ##  
     parser_init = subparsers.add_parser(
         "init",
-        formatter_class=configer.custom_help_formatter,
+        formatter_class=microcat.custom_help_formatter,
         parents=[common_parser],# add common parser
         prog="microcat init",
         help="init project",
@@ -484,7 +485,7 @@ def main():
 
     parser_bulk_wf = subparsers.add_parser(
             "bulk_wf",
-            formatter_class=configer.custom_help_formatter,
+            formatter_class=microcat.custom_help_formatter,
             parents=[common_parser, run_parser],
             prog="smart bulk_wf",
             help="bulk rna seq microbiome mining pipeline",
@@ -502,7 +503,7 @@ def main():
 
     parser_scrna_wf = subparsers.add_parser(
             "scrna_wf",
-            formatter_class=configer.custom_help_formatter,
+            formatter_class=microcat.custom_help_formatter,
             parents=[common_parser, run_parser],
             prog="smart scrna_wf",
             help="single cell rna seq microbiome mining pipeline",

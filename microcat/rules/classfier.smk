@@ -1,8 +1,8 @@
-import glob
-import os
-## beta test
-sys.path.append('/data/project/host-microbiome/microcat/microcat/')
-import sample
+# import glob
+# import os
+# ## beta test
+# sys.path.append('/data/project/host-microbiome/microcat/microcat/')
+# import sample
 # def get_barcodes(wildcards):
 #     checkpoint_output = checkpoints.cellranger_unmapped_demultiplex.get(sample=wildcards.sample).output[0]
 #     # Get all barcodes by parsing file names

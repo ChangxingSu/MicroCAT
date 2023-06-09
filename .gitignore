@@ -8,6 +8,9 @@
 
 microcat/__pycache__/
 ./docs/
+build/
+dist/
+microcat.egg-info/
 microcat/data/
 src/*_cache
 src/*_files
