@@ -534,7 +534,7 @@ def main():
 
     try:
         if args.version:
-            print("microcat version %s" % __version__)
+            print("microcat version %s" % microcat.__version__)
             sys.exit(0)
         args.func(args, unknown)
     except AttributeError as e:

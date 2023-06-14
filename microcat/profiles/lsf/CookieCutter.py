@@ -13,7 +13,7 @@ class CookieCutter:
 
     @staticmethod
     def get_default_queue() -> str:
-        return "short"
+        return "smp"
 
     @staticmethod
     def get_default_project() -> str:
@@ -21,7 +21,7 @@ class CookieCutter:
 
     @staticmethod
     def get_lsf_unit_for_limits() -> str:
-        return "GB"
+        return "MB"
 
     @staticmethod
     def get_unknwn_behaviour() -> str:

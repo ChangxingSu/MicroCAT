@@ -158,6 +158,7 @@ if config["params"]["host"]["starsolo"]["do"]:
                     --runThreadN {params.threads} \
                     --clipAdapterType CellRanger4 \
                     --outFilterScoreMin 30 \
+                    --readFilesCommand zcat \
                     --soloCBmatchWLtype 1MM_multi_Nbase_pseudocounts \
                     --soloUMIfiltering MultiGeneUMI_CR \
                     --outSAMtype BAM SortedByCoordinate\
