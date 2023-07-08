@@ -2,7 +2,7 @@
 from microcat.configer import MicrocatConfig
 from microcat.configer import parse_yaml
 from microcat.configer import update_config
-from microcat.configer import custom_help_formatter
+# from microcat.configer import custom_help_formatter
 
 from microcat.sample import HEADERS
 from microcat.sample import parse_samples

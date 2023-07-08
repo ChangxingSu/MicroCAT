@@ -13,7 +13,7 @@ option_list = list(
 
 opt = parse_args(OptionParser(option_list = option_list))
 
-setwd("/home/microcat-sucx/project/scRNA-analysis/benchmark/Saliba2016")
+setwd("/home/microcat-sucx/project/scRNA-analysis/benchmark/Galeano2022")
 
 krak2_output_file = read.delim(opt$output_file, header = F)
 

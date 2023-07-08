@@ -1,7 +1,8 @@
 import os
 import microcat
-import requests
+import subprocess
 import gzip
+from ruamel.yaml import YAML
 
 MICROCAT_DIR = microcat.__path__[0]
 CONFIGS_DIR = os.path.join(MICROCAT_DIR, 'config')
@@ -9,9 +10,8 @@ DEFAULT_DATA_DIR = os.path.join(MICROCAT_DIR, 'data')
 
 
 def download_file(url, destination):
-    response = requests.get(url)
-    with open(destination, 'wb') as file:
-        file.write(response.content)
+    command = f"wget -O {destination} {url}"
+    subprocess.call(command, shell=True)
 
 
 def extract_gzip_file(gzip_file, destination):
@@ -25,7 +25,11 @@ def update_config_file(cell_white_list_path):
     conf = microcat.parse_yaml(config_file_path)
     # Update the cell whitelist location in the config.yaml file here
     # Modify according to your specific requirements
-    conf["params"]["data_dir"] = cell_white_list
+    conf["datas"]["barcode_list_dirs"]["tenX"] = cell_white_list_path
+    # Update the configuration file
+    yaml = YAML()
+    with open(config_file_path, 'w') as f_out:
+        yaml.dump(conf, f_out)
 
 
 # Create the data folder
@@ -67,35 +71,60 @@ else:
     print("Invalid choice!")
     exit()
 
-# Set the paths and URLs for the files
-tenX_v1_barcode_url = 'https://github.com/10XGenomics/cellranger/raw/master/lib/python/cellranger/barcodes/737K-april-2014_rc.txt'
+tenX_v1_barcode_url = 'https://teichlab.github.io/scg_lib_structs/data/737K-april-2014_rc.txt.gz'
 tenX_v1_barcode_filename = '737K-april-2014_rc.txt'
 tenX_v1_barcode_save_path = os.path.join(data_save_path, tenX_v1_barcode_filename)
 
+
 # Download the file if it doesn't exist
 if not os.path.exists(tenX_v1_barcode_save_path):
-    download_file(tenX_v1_barcode_url, tenX_v1_barcode_save_path)
+    tenX_v1_barcode_gz_save_path = tenX_v1_barcode_save_path + '.gz'
+    print(f"Downloading {tenX_v1_barcode_filename}.gz")
+    download_file(tenX_v1_barcode_url, tenX_v1_barcode_gz_save_path)
+    print(f"Extracting {tenX_v1_barcode_filename}.gz")
+    extract_gzip_file(tenX_v1_barcode_gz_save_path, tenX_v1_barcode_save_path)
+    os.remove(tenX_v1_barcode_gz_save_path)
 
-
-tenX_v2_barcode_url = 'https://github.com/10XGenomics/cellranger/raw/master/lib/python/cellranger/barcodes/737K-august-2016.txt'
+tenX_v2_barcode_url = 'https://teichlab.github.io/scg_lib_structs/data/737K-august-2016.txt.gz'
 tenX_v2_barcode_filename = '737K-august-2016.txt'
 tenX_v2_barcode_save_path = os.path.join(data_save_path, tenX_v2_barcode_filename)
 
 # Download the file if it doesn't exist
 if not os.path.exists(tenX_v2_barcode_save_path):
-    download_file(tenX_v2_barcode_url, tenX_v2_barcode_save_path)
+    tenX_v2_barcode_gz_save_path = tenX_v2_barcode_save_path + '.gz'
+    print(f"Downloading {tenX_v2_barcode_filename}.gz")
+    download_file(tenX_v2_barcode_url, tenX_v2_barcode_gz_save_path)
+    print(f"Extracting {tenX_v2_barcode_filename}.gz")
+    extract_gzip_file(tenX_v2_barcode_gz_save_path, tenX_v2_barcode_save_path)
+    os.remove(tenX_v2_barcode_gz_save_path)
 
-
-tenX_v3_barcode_url = 'https://github.com/10XGenomics/cellranger/raw/master/lib/python/cellranger/barcodes/3M-february-2018.txt.gz'
+tenX_v3_barcode_url = 'https://teichlab.github.io/scg_lib_structs/data/3M-february-2018.txt.gz'
 tenX_v3_barcode_filename = '3M-february-2018.txt'
 tenX_v3_barcode_save_path = os.path.join(data_save_path, tenX_v3_barcode_filename)
 
 # Download and extract the file if it doesn't exist
 if not os.path.exists(tenX_v3_barcode_save_path):
     tenX_v3_barcode_gz_save_path = tenX_v3_barcode_save_path + '.gz'
+    print(f"Downloading {tenX_v3_barcode_filename}.gz")
     download_file(tenX_v3_barcode_url, tenX_v3_barcode_gz_save_path)
+    print(f"Extracting {tenX_v3_barcode_filename}.gz")
     extract_gzip_file(tenX_v3_barcode_gz_save_path, tenX_v3_barcode_save_path)
     os.remove(tenX_v3_barcode_gz_save_path)
 
+
+tenX_multiome_barcode_url = 'https://woldlab.caltech.edu/~diane/genome/737K-arc-v1.txt.gz'
+tenX_multiome_barcode_filename = '737K-arc-v1.txt'
+tenX_multiome_barcode_save_path = os.path.join(data_save_path, tenX_multiome_barcode_filename)
+
+
+# Download the file if it doesn't exist
+if not os.path.exists(tenX_multiome_barcode_save_path):
+    tenX_multiome_barcode_gz_save_path = tenX_multiome_barcode_save_path + '.gz'
+    print(f"Downloading {tenX_multiome_barcode_filename}.gz")
+    download_file(tenX_multiome_barcode_url, tenX_multiome_barcode_gz_save_path)
+    print(f"Extracting {tenX_multiome_barcode_filename}.gz")
+    extract_gzip_file(tenX_multiome_barcode_gz_save_path, tenX_multiome_barcode_save_path)
+    os.remove(tenX_multiome_barcode_gz_save_path)
+    
 # Update the config.yaml file
 update_config_file(data_save_path)

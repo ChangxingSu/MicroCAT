@@ -19,8 +19,8 @@ option_list = list(
 ## which is usually several thousand or tens of thousands of characters. If you enter more characters than this limit on the command line, the system will not be able 
 ## to handle the command properly. Therefore, when searching for a large number of tax IDs, it is important to avoid exceeding the limit of command line length for 
 ## successful execution of the command.
-setwd("/home/microcat-sucx/project/scRNA-analysis/benchmark/Saliba2016")
 
+setwd("/home/microcat-sucx/project/scRNA-analysis/benchmark/Galeano2022")
 opt = parse_args(OptionParser(option_list = option_list))
 
 kr = read.delim(opt$kraken_report, header = F)

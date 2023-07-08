@@ -1,0 +1,79 @@
+---
+title: "microcat_bam_handle"
+output: html_document
+date: "2023-06-20"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r message=FALSE, paged.print=TRUE}
+library(Biostrings)
+library(ShortRead)
+library(doParallel)
+library(GenomicAlignments)
+```
+```{r}
+param <- ScanBamParam(tag=c("YP","CB","UB","AS","XA"),
+what=scanBamWhat())
+
+BAM_file= readGAlignments(file="/home/microcat-sucx/project/scRNA-analysis/benchmark/Galeano2022/results/03.classifier/pathseq_classified_output/MOI_100_S4/MOI_100_S4_pathseq_classified.bam",param = ScanBamParam(what =scanBamWhat()))
+
+BAM_file= readGAlignments(file="/home/microcat-sucx/project/scRNA-analysis/benchmark/Galeano2022/results/04.test/MOI_100_S4/MOI_100_S4_pathseq_classified_keep_CB_sorted.bam",param = param)
+
+
+
+```
+```{r}
+Reads_quality = as.character(BAM_file@elementMetadata$qual)
+Reads_quality = PhredQuality(Reads_quality)
+Reads_quality = as(Reads_quality,"IntegerList")
+Reads_quality = as.numeric(as.matrix(Reads_quality))
+```
+
+```{r}
+Viral_reads <- subset(BAM_file,BAM_file@elementMetadata$YP == "28131")
+
+Viral_reads_sepecific <- subset(Viral_reads,Viral_reads@elementMetadata$CB == "TTTCCTCAGTTGAGTA-1")
+Viral_reads_sepecific <-  unique(Viral_reads_sepecific@elementMetadata$seq)
+```
+
+```{r}
+Viral_reads <- subset(BAM_file,BAM_file@elementMetadata$YP == "28131")
+
+# Viral_reads = unique(BAM_file@elementMetadata$seq)
+
+Viral_reads = unique(Viral_reads@elementMetadata$seq)
+
+Viral_reads_contents = alphabetFrequency(Viral_reads,as.prob =T )
+Viral_reads_contents = Viral_reads_contents[,c("A","C","G","T")]
+    
+if (class(Viral_reads_contents)=="numeric") {
+  Viral_reads_contents = matrix(Viral_reads_contents_mean,ncol = 4)
+}
+
+# Viral_reads_contents_mean =colMeans(matrix(Viral_reads_contents_mean,ncol = 4))
+Viral_reads_contents_mean =colMeans(Viral_reads_contents)
+Read_entropy = sum(-log(Viral_reads_contents_mean)*Viral_reads_contents_mean,na.rm = T)
+
+```
+
+```{r}
+mcols(BAM_file)
+```
+```{r}
+DUST_score = dustyScore( BAM_file@elementMetadata$seq)
+Mean_dust_score = mean(DUST_score)
+Percent_high_quality_reads =  sum(DUST_score<500)/length(DUST_score)
+```
+
+```{r}
+Covered_genome = coverage(Viral_reads)[[i]]
+Covered_genome = as.numeric(Covered_genome)
+Spatial_distribution =sum(Covered_genome>0)/length(Covered_genome)
+Covered_genome = rle(sign(Covered_genome))
+Longest_contig = max(Covered_genome$lengths[Covered_genome$values>0])
+```
+

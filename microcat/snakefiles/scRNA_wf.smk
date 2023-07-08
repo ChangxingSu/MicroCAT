@@ -36,6 +36,8 @@ if config["params"]["host"]["starsolo"]["do"]:
         PLATFORM = "tenX"
     elif "Smartseq" in config["params"]["host"]["starsolo"]["assay"]:
         PLATFORM = "smartseq"
+    elif "Seq-well" in config["params"]["host"]["starsolo"]["assay"]:
+        PLATFORM = "tenX"
     else:
         raise ValueError("Platform must be either 'tenX' or 'smartseq'")
 elif config["params"]["host"]["cellranger"]["do"]:

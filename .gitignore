@@ -38,3 +38,4 @@ data/bench_dataset
 **/*.db
 **/*.fai
 
+*.rmd

@@ -23,7 +23,7 @@ option_list = list(
 )
 
 opt = parse_args(OptionParser(option_list = option_list))
-setwd("/home/microcat-sucx/project/scRNA-analysis/benchmark/Saliba2016")
+setwd("/home/microcat-sucx/project/scRNA-analysis/benchmark/Galeano2022")
 # opt = list(fa1 = '/data/scRNA/EarlyGastricCancer-EGC/results/03.classifier/rmhost_extracted_classified_output/SRR9713114/SRR9713114_kraken2_extracted_classified.fq',
 #            microbiome_output_file = '/data/scRNA/EarlyGastricCancer-EGC/results/03.classifier/rmhost_extracted_classified_output/SRR9713114/SRR9713114_kraken2_extracted_classified_output.txt',
 #            cb_len = 16,

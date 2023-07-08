@@ -421,8 +421,8 @@ if config["params"]["classifier"]["krakenuniq"]["do"]:
             mem_mb=config["params"]["classifier"]["krakenuniq"]["mem_mb"]
         conda:
             config["envs"]["krakenuniq"]
-        message:
-            "Classifier: Performing Taxonomic Classifcation of Sample {sample} with krakenuniq."
+        # message:
+        #     "Classifier: Performing Taxonomic Classifcation of Sample {sample} with krakenuniq."
         shell:
             '''
             krakenuniq --db {params.database} \
@@ -653,108 +653,108 @@ if config["params"]["classifier"]["pathseq"]["do"]:
             {params.pathseqscore_other_params}\
             2>&1 | tee {log}; \
             '''
-    rule pathseq_INVADESEQ:
-        input:
-            unmapped_bam_sorted_file =os.path.join(
-                config["output"]["host"],
-                "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam"),
-            features_file = os.path.join(
-                config["output"]["host"],
-                "cellranger_count/{sample}/{sample}_features.tsv"),
-            pathseq_classified_bam_file = os.path.join(
-                            config["output"]["classifier"],
-                            "pathseq_classified_output/{sample}/{sample}_pathseq_classified.bam"),
-            pathseq_output = os.path.join(
-                config["output"]["classifier"],
-                "pathseq_classified_output/{sample}/{sample}_pathseq_classified.txt")
-        output:
-            filtered_matrix_readname = os.path.join(
-                config["output"]["classifier"],
-                "pathseq_final_output/{sample}/{sample}_filtered_matrix_readname.txt"),
-            unmap_cbub_bam = os.path.join(
-                config["output"]["classifier"],
-                "pathseq_final_output/{sample}/{sample}_pathseq_unmap_cbub.bam"),
-            unmap_cbub_fasta = os.path.join(
-                config["output"]["classifier"],
-                "pathseq_final_output/{sample}/{sample}_pathseq_unmap_cbub.fasta"),
-            filtered_matrix_list= os.path.join(
-                config["output"]["classifier"],
-                "pathseq_final_output/{sample}/{sample}_pathseq_filtered_matrix_list.txt"),
-            matrix_readnamepath = os.path.join(
-                    config["output"]["classifier"],
-                    "pathseq_final_output/{sample}/{sample}_filtered_matrix.readnamepath"),
-            genus_cell = os.path.join(
-                    config["output"]["classifier"],
-                    "pathseq_final_output/{sample}/{sample}_genus_cell.txt"),
-            filtered_matrix_genus_csv = os.path.join(
-                    config["output"]["classifier"],
-                    "pathseq_final_output/{sample}/{sample}_filtered_matrix_genus.csv"),
-            filtered_matrix_validate = os.path.join(
-                    config["output"]["classifier"],
-                    "pathseq_final_output/{sample}/{sample}_filtered_matrix.validate.csv")
-        conda:
-            config["envs"]["kmer_python"]
-        params:
-            SampleID="{sample}",
-            INVADEseq_script = config["scripts"]["INVADEseq"]
-        shell:
-            '''
-            python {params.INVADEseq_script} \
-            {input.unmapped_bam_sorted_file} \
-            {params.SampleID} \
-            {input.features_file} \
-            {input.pathseq_classified_bam_file}\
-            {input.pathseq_output} \
-            {output.filtered_matrix_readname} \
-            {output.unmap_cbub_bam} \
-            {output.unmap_cbub_fasta} \
-            {output.filtered_matrix_list} \
-            {output.matrix_readnamepath} \
-            {output.genus_cell} \
-            {output.filtered_matrix_genus_csv} \
-            {output.filtered_matrix_validate}
-            '''
+    # rule pathseq_INVADESEQ:
+    #     input:
+    #         unmapped_bam_sorted_file =os.path.join(
+    #             config["output"]["host"],
+    #             "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam"),
+    #         features_file = os.path.join(
+    #             config["output"]["host"],
+    #             "cellranger_count/{sample}/{sample}_features.tsv"),
+    #         pathseq_classified_bam_file = os.path.join(
+    #                         config["output"]["classifier"],
+    #                         "pathseq_classified_output/{sample}/{sample}_pathseq_classified.bam"),
+    #         pathseq_output = os.path.join(
+    #             config["output"]["classifier"],
+    #             "pathseq_classified_output/{sample}/{sample}_pathseq_classified.txt")
+    #     output:
+    #         filtered_matrix_readname = os.path.join(
+    #             config["output"]["classifier"],
+    #             "pathseq_final_output/{sample}/{sample}_filtered_matrix_readname.txt"),
+    #         unmap_cbub_bam = os.path.join(
+    #             config["output"]["classifier"],
+    #             "pathseq_final_output/{sample}/{sample}_pathseq_unmap_cbub.bam"),
+    #         unmap_cbub_fasta = os.path.join(
+    #             config["output"]["classifier"],
+    #             "pathseq_final_output/{sample}/{sample}_pathseq_unmap_cbub.fasta"),
+    #         filtered_matrix_list= os.path.join(
+    #             config["output"]["classifier"],
+    #             "pathseq_final_output/{sample}/{sample}_pathseq_filtered_matrix_list.txt"),
+    #         matrix_readnamepath = os.path.join(
+    #                 config["output"]["classifier"],
+    #                 "pathseq_final_output/{sample}/{sample}_filtered_matrix.readnamepath"),
+    #         genus_cell = os.path.join(
+    #                 config["output"]["classifier"],
+    #                 "pathseq_final_output/{sample}/{sample}_genus_cell.txt"),
+    #         filtered_matrix_genus_csv = os.path.join(
+    #                 config["output"]["classifier"],
+    #                 "pathseq_final_output/{sample}/{sample}_filtered_matrix_genus.csv"),
+    #         filtered_matrix_validate = os.path.join(
+    #                 config["output"]["classifier"],
+    #                 "pathseq_final_output/{sample}/{sample}_filtered_matrix.validate.csv")
+    #     conda:
+    #         config["envs"]["kmer_python"]
+    #     params:
+    #         SampleID="{sample}",
+    #         INVADEseq_script = config["scripts"]["INVADEseq"]
+    #     shell:
+    #         '''
+    #         python {params.INVADEseq_script} \
+    #         {input.unmapped_bam_sorted_file} \
+    #         {params.SampleID} \
+    #         {input.features_file} \
+    #         {input.pathseq_classified_bam_file}\
+    #         {input.pathseq_output} \
+    #         {output.filtered_matrix_readname} \
+    #         {output.unmap_cbub_bam} \
+    #         {output.unmap_cbub_fasta} \
+    #         {output.filtered_matrix_list} \
+    #         {output.matrix_readnamepath} \
+    #         {output.genus_cell} \
+    #         {output.filtered_matrix_genus_csv} \
+    #         {output.filtered_matrix_validate}
+    #         '''
     rule pathseq_classified_all:
         input:   
-            # expand(os.path.join(
-            #     config["output"]["classifier"],
-            #     "pathseq_classified_output/{sample}/{sample}_pathseq_classified.bam"),sample=SAMPLES_ID_LIST),
-            # expand(os.path.join(
-            #     config["output"]["classifier"],
-            #     "pathseq_classified_output/{sample}/{sample}_pathseq_classified.txt"),sample=SAMPLES_ID_LIST),
-            # expand(os.path.join(
-            #     config["output"]["classifier"],
-            #     "pathseq_classified_output/{sample}/{sample}_pathseq_filter_metrics.txt"),sample=SAMPLES_ID_LIST),
-            # expand(os.path.join(
-            #     config["output"]["classifier"],
-            #     "pathseq_classified_output/{sample}/{sample}_pathseq_score_metrics.txt"),sample=SAMPLES_ID_LIST)
-            # expand(os.path.join(
-            #     config["output"]["classifier"],
-            #     "pathseq_classified_output/{sample}/{sample}_pathseq_output.txt"),sample=SAMPLES_ID_LIST)
             expand(os.path.join(
                 config["output"]["classifier"],
-                "pathseq_final_output/{sample}/{sample}_filtered_matrix_readname.txt"),sample=SAMPLES_ID_LIST),
+                "pathseq_classified_output/{sample}/{sample}_pathseq_classified.bam"),sample=SAMPLES_ID_LIST),
             expand(os.path.join(
                 config["output"]["classifier"],
-                "pathseq_final_output/{sample}/{sample}_pathseq_unmap_cbub.bam"),sample=SAMPLES_ID_LIST),
+                "pathseq_classified_output/{sample}/{sample}_pathseq_classified.txt"),sample=SAMPLES_ID_LIST),
             expand(os.path.join(
                 config["output"]["classifier"],
-                "pathseq_final_output/{sample}/{sample}_pathseq_unmap_cbub.fasta"),sample=SAMPLES_ID_LIST),
+                "pathseq_classified_output/{sample}/{sample}_pathseq_filter_metrics.txt"),sample=SAMPLES_ID_LIST),
             expand(os.path.join(
                 config["output"]["classifier"],
-                "pathseq_final_output/{sample}/{sample}_pathseq_filtered_matrix_list.txt"),sample=SAMPLES_ID_LIST),
+                "pathseq_classified_output/{sample}/{sample}_pathseq_score_metrics.txt"),sample=SAMPLES_ID_LIST),
             expand(os.path.join(
-                    config["output"]["classifier"],
-                    "pathseq_final_output/{sample}/{sample}_filtered_matrix.readnamepath"),sample=SAMPLES_ID_LIST),
-            expand(os.path.join(
-                    config["output"]["classifier"],
-                    "pathseq_final_output/{sample}/{sample}_genus_cell.txt"),sample=SAMPLES_ID_LIST),
-            expand(os.path.join(
-                    config["output"]["classifier"],
-                    "pathseq_final_output/{sample}/{sample}_filtered_matrix_genus.csv"),sample=SAMPLES_ID_LIST),
-            expand(os.path.join(
-                    config["output"]["classifier"],
-                    "pathseq_final_output/{sample}/{sample}_filtered_matrix.validate.csv"),sample=SAMPLES_ID_LIST)
+                config["output"]["classifier"],
+                "pathseq_classified_output/{sample}/{sample}_pathseq_output.txt"),sample=SAMPLES_ID_LIST)
+            # expand(os.path.join(
+            #     config["output"]["classifier"],
+            #     "pathseq_final_output/{sample}/{sample}_filtered_matrix_readname.txt"),sample=SAMPLES_ID_LIST),
+            # expand(os.path.join(
+            #     config["output"]["classifier"],
+            #     "pathseq_final_output/{sample}/{sample}_pathseq_unmap_cbub.bam"),sample=SAMPLES_ID_LIST),
+            # expand(os.path.join(
+            #     config["output"]["classifier"],
+            #     "pathseq_final_output/{sample}/{sample}_pathseq_unmap_cbub.fasta"),sample=SAMPLES_ID_LIST),
+            # expand(os.path.join(
+            #     config["output"]["classifier"],
+            #     "pathseq_final_output/{sample}/{sample}_pathseq_filtered_matrix_list.txt"),sample=SAMPLES_ID_LIST),
+            # expand(os.path.join(
+            #         config["output"]["classifier"],
+            #         "pathseq_final_output/{sample}/{sample}_filtered_matrix.readnamepath"),sample=SAMPLES_ID_LIST),
+            # expand(os.path.join(
+            #         config["output"]["classifier"],
+            #         "pathseq_final_output/{sample}/{sample}_genus_cell.txt"),sample=SAMPLES_ID_LIST),
+            # expand(os.path.join(
+            #         config["output"]["classifier"],
+            #         "pathseq_final_output/{sample}/{sample}_filtered_matrix_genus.csv"),sample=SAMPLES_ID_LIST),
+            # expand(os.path.join(
+            #         config["output"]["classifier"],
+            #         "pathseq_final_output/{sample}/{sample}_filtered_matrix.validate.csv"),sample=SAMPLES_ID_LIST)
 else:
     rule pathseq_classified_all:
         input:    

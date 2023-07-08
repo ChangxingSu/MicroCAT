@@ -65,7 +65,7 @@ class MicrocatConfig:
             ██║╚██╔╝██║██║██║     ██╔══██╗██║   ██║██║     ██╔══██║   ██║   
             ██║ ╚═╝ ██║██║╚██████╗██║  ██║╚██████╔╝╚██████╗██║  ██║   ██║   
             ╚═╝     ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝ ╚═════╝  ╚═════╝╚═╝  ╚═╝   ╚═╝   
-    Microbiome Identification in Cell Resolution from Omics-Computational Analysis Toolbox
+    Microbiome Identification in Cell Resolution from Omics-Computational Analysis Toolbox\n
 Thanks for using microcat.
 A microbiome identification project has been created at %s
 if you want to create fresh conda environments:
@@ -115,30 +115,37 @@ if you have environments:
             # Copy the source file to the target file
             shutil.copyfile(os.path.join(self.envs_dir, i), dest_file)
         
-        overwrite_all = None
-        # Iterate through the subdirectories of the profiles directory and copy them into the profiles subdirectory of the project directory
-        for i in os.listdir(self.profiles_dir):
-            dest_dir = os.path.join(self.work_dir, "profiles", i)
+        if os.path.exists(self.profiles_dir):
+            overwrite_all = None
+            # Iterate through the subdirectories of the profiles directory and copy them into the profiles subdirectory of the project directory
+            for i in os.listdir(self.profiles_dir):
+                dest_dir = os.path.join(self.work_dir, "profiles", i)
 
-            # If the target directory already exists, output a prompt message and terminate the program
-            if os.path.exists(dest_dir):
-                if overwrite_all is None:
-                    print(f"{dest_dir} already exists.")
-                    proceed = input("Do you want to overwrite it? (y/n/all/quit): ").lower()
-                    if proceed == 'n':
-                        print("Skip updating this file.")
+                # If the target directory already exists, output a prompt message and terminate the program
+                if os.path.exists(dest_dir):
+                    if overwrite_all is None:
+                        print(f"{dest_dir} already exists.")
+                        proceed = input("Do you want to overwrite it? (y/n/all/quit): ").lower()
+                        if proceed == 'n':
+                            print("Skip updating this file.")
+                            continue
+                        elif proceed == 'all':
+                            overwrite_all = True
+                        elif proceed == 'quit':
+                            print("Aborted.")
+                            sys.exit(1)
+                    elif overwrite_all is False:
+                        print("Skip updating this dir.")
                         continue
-                    elif proceed == 'all':
-                        overwrite_all = True
-                    elif proceed == 'quit':
-                        print("Aborted.")
-                        sys.exit(1)
-                elif overwrite_all is False:
-                    print("Skip updating this dir.")
-                    continue
-            # Otherwise copy the source directory to the target directory
-            else:
-                shutil.copytree(os.path.join(self.profiles_dir, i), dest_dir)
+                # Otherwise copy the source directory to the target directory
+                else:
+                    shutil.copytree(os.path.join(self.profiles_dir, i), dest_dir)
+        else:
+            # Handle the case when 'profiles' directory does not exist
+            print("\033[93mWarning: The 'profiles' directory does not exist in the original folder.")
+            print("You can only run the program locally using the --run-local option.")
+            print("If you want to run it on a cluster, please refer to the documentation for the 'cluster run' section.\033[0m")
+            print("Skipping the profiles directory.")
 
     def get_config(self):
         """

@@ -53,7 +53,7 @@ option_list <- list(
 opt_parser <- OptionParser(option_list = option_list)
 opt <- parse_args(opt_parser)
 
-setwd("/home/microcat-sucx/project/scRNA-analysis/benchmark/Saliba2016/")
+setwd("/home/microcat-sucx/project/scRNA-analysis/benchmark/Galeano2022")
 
 files <- list.files(opt$path,recursive = TRUE)
 stopifnot(length(files) > 0) # make sure the input dir path is set correctly

@@ -2,12 +2,9 @@ channels:
   - defaults
   - bioconda
   - conda-forge
-  - pip
 dependencies:
   - python=3.8
   - biopython
   - scipy
   - pysam
   - regex
-  - pip:
-    - gzip
