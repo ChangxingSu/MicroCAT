@@ -27,19 +27,38 @@ packages = ["microcat"]
 
 package_data = {
     "microcat": [
-        "microcat/config/*.yaml",
-        "microcat/envs/*.yaml",
-        "microcat/snakefiles/*.smk",
-        "microcat/rules/*.smk",
-        "microcat/scripts/*.py",
-        "microcat/scripts/*.R",
+        "microcat/single_wf/config/*.yaml",
+        "microcat/single_wf/envs/*.yaml",
+        "microcat/single_wf/snakefiles/*.smk",
+        "microcat/single_wf/rules/*.smk",
+        "microcat/single_wf/scripts/*.py",
+        "microcat/single_wf/scripts/*.R",
+        "microcat/bulk_wf/config/*.yaml",
+        "microcat/bulk_wf/envs/*.yaml",
+        "microcat/bulk_wf/snakefiles/*.smk",
+        "microcat/bulk_wf/rules/*.smk",
+        "microcat/bulk_wf/scripts/*.py",
+        "microcat/bulk_wf/scripts/*.R",
+        "microcat/spatial_wf/config/*.yaml",
+        "microcat/spatial_wf/envs/*.yaml",
+        "microcat/spatial_wf/snakefiles/*.smk",
+        "microcat/spatial_wf/rules/*.smk",
+        "microcat/spatial_wf/scripts/*.py",
+        "microcat/spatial_wf/scripts/*.R",
+        "microcat/multi_wf/config/*.yaml",
+        "microcat/multi_wf/envs/*.yaml",
+        "microcat/multi_wf/snakefiles/*.smk",
+        "microcat/multi_wf/rules/*.smk",
+        "microcat/multi_wf/scripts/*.py",
+        "microcat/multi_wf/scripts/*.R",
+        "microcat/profiles/*",
         "microcat/*.py",
     ]
 }
 
 data_files = [(".", ["LICENSE", "README.md"])]
 
-entry_points = {"console_scripts": ["microcat=microcat.corer:main"]}
+entry_points = {"console_scripts": ["microcat=microcat.cli:microcat"]}
 
 requires = [
     req.strip()

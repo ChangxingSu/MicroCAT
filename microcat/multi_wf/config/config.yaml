@@ -1,0 +1,143 @@
+workflow: single
+params:
+  begin: trimming
+  samples: sample.tsv
+  data_dir:
+
+  simulate:
+    do: false
+    threads: 8
+
+  trimming:
+
+
+  host:
+    cellranger:
+      do: false
+      reference: "/data/database/refdata-gex-GRCh38-2020-A"
+      variousParams: ""
+    starsolo:
+      do: True
+      reference: "/data/database/STAR_refdata-gex-GRCh38-2020-A"
+      barcode:
+        soloCBwhitelist:
+        soloCBstart:
+        soloCBlen:
+        soloUMIstart:
+        soloUMIlen:
+        soloCBposition:
+        soloUMIposition:
+      algorithm:
+        soloUMIdedup:
+        soloCBmatchWLtype:
+        soloUMIfiltering:
+        soloCellFilter:
+        clipAdapterType:
+        outFilterScoreMin:
+        soloMultiMappers:
+      soloType: 
+      soloAdapterSequence: ""
+      soloStrand:
+      variousParams: ""
+
+  classifier:
+    kraken2uniq:
+      do: true
+      kraken2_database: "/data/database/kraken2_RefSeqV217_Complete_Chrom_nont"
+      threads: 40
+    pathseq:
+      do: false
+      microbe_bwa_image: /data/database/pathseq_database/refv218/microbiome_RefseqV218_Compelete-Chromon.fasta.img
+      microbe_dict: /data/database/pathseq_database/refv218/microbiome_RefseqV218_Compelete-Chromon.dict
+      host_bfi: /data/database/pathseq_database/refv218/pathseq_resources_pathseq_host.bfi
+      taxonomy_db: /data/database/pathseq_database/refv218/microbiome_RefseqV218_Compelete-Chromon.db
+      host_bwa_image: /data/database/pathseq_database/refv218/pathseq_resources_pathseq_host.fa.img
+    pathseqscore: ""
+    
+    metaphlan:
+      do: false
+      sequence_type: fastq
+      analysis_type: "rel_ab_w_read_stats"
+      bowtie2db: "/data/database/metaphlan_database/"
+      db_index: "mpa_vOct22_CHOCOPhlAnSGB_202212"
+      metaphlan_other_params: ''
+    krakenuniq:
+      do: false
+      krakenuniq_database: "/data/database/krakenuniq_database/krakuniq_refseqV218/"
+      estimate_precision: 12
+    sckmer:
+      cb_len: 16
+      umi_len: 10
+      min_frac: 0.5
+      kmer_len: 35
+      nsample: 1000
+
+
+output:
+  simulate: results/00.simulate
+  raw: results/00.raw
+  trimming: results/01.trimming
+  host: results/02.host
+  classifier: results/03.classifier
+
+logs:
+  prepare: "logs/00.prepare"
+  host: "logs/02.host"
+  classifier: "logs/03.classifier"
+
+benchmarks:
+  host: "benchmarks/02.host"
+  classifier: "benchmarks/03.classifier"
+
+datas:
+  barcode_list_dirs:
+    tenX: "/data/project/host-microbiome/microcat/microcat/single_wf/data/"
+
+envs:
+  kraken2: ../envs/kraken2.yaml
+  krakenuniq: ../envs/krakenuniq.yaml
+  pathseq: ../envs/pathseq.yaml
+  metaphlan: ../envs/metaphlan.yaml
+  kmer_qc: ../envs/kmer_qc.yaml
+  kmer_python: ../envs/kmer_python.yaml
+  star: ../envs/star.yaml
+
+resources:
+  cellranger:
+    threads: 40
+    mem_mb: 100000
+  starsolo:
+    threads: 40
+    mem_mb: 100000
+  samtools_extract:
+    threads: 20
+    mem_mb: 40000
+  paired_bam_to_fastq:
+    threads: 20
+    mem_mb: 40000
+  kraken2uniq:
+    threads: 40
+    mem_mb: 300000
+  krakenuniq:
+    threads: 40
+    mem_mb: 100000
+  metaphlan:
+    threads: 20
+    mem_mb: 100000
+  pathseq:
+    threads: 24
+    mem_mb: 200000
+  
+
+
+scripts:
+  extract_microbiome_output: scripts/extract_microbiome_output.R
+  kraken2mpa: scripts/kraken2mpa.py
+  kraken2sc: scripts/kraken2sc.py
+  extract_kraken_reads: scripts/extract_kraken_reads.py
+  krak2_output_denosing: scripts/krak2_output_denosing.R
+  sckmer_unpaired: scripts/sckmer_unpaired.R
+  spilt_bam_by_tag: scripts/spilt_bam_by_tag.py
+  sample_denosing: scripts/sample_denosing.R
+  INVADEseq: scripts/INVADEseq.py
+  starsolo_10X_auto: scripts/starsolo_tenX_auto.sh

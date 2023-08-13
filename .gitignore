@@ -37,5 +37,5 @@ data/bench_dataset
 **/Log.out
 **/*.db
 **/*.fai
-
+microcat/single_wf/data/
 *.rmd

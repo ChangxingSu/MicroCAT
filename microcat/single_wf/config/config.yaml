@@ -1,0 +1,172 @@
+#######################################################################################
+# A default configuration that will be loaded for all microcat single analysis project
+# Users are expected to override these values in their own `config.yaml` file.
+# This is also the "master list" of all allowed keys and values.
+
+#######################################################################################
+# Workflow settings
+workflow                       : single
+
+#######################################################################################
+# Params settings
+params:
+  begin                        : trimming # First step of workflow 
+  samples                      : sample.tsv # Sample info table
+  ## Host Alignment parameters
+  host:
+    cellranger:
+      do                       : false # Whether to run Cell Ranger for host mapping
+      reference                : "/data/database/refdata-gex-GRCh38-2020-A" # Path of Cell Ranger reference
+      variousParams            : "" # Other Cell Ranger parameters
+    starsolo:
+      do                       : True # Whether to run STARsolo for host mapping
+      reference                : "/data/database/STAR_refdata-gex-GRCh38-2020-A" # Path of STARsolo reference
+      barcode: ### Barcode parameters for STARsolo
+        soloCBwhitelist        :
+        soloCBstart            :
+        soloCBlen              :
+        soloUMIstart           :
+        soloUMIlen             :
+        soloCBposition         :
+        soloUMIposition        :
+      algorithm: ### Algorithm parameters for STARsolo
+        soloUMIdedup           :
+        soloCBmatchWLtype      :
+        soloUMIfiltering       :
+        soloCellFilter         :
+        clipAdapterType        :
+        outFilterScoreMin      :
+        soloMultiMappers       :
+      soloType                 : 
+      soloAdapterSequence      : ""
+      soloStrand               :
+      variousParams            : "" # Other STARsolo parameters
+
+  ## Taxonomic classification parameters  
+  classifier:
+    kraken2uniq:
+      do                       : true  # Whether to run kraken2uniq for classification
+      kraken2_database         : "/data/database/kraken2uniq_database/db_bac_fungi_viral_arch_human" # Path for kraken2 database
+      variousParams            : "" # Other kraken2 parameters
+    pathseq:
+      do                       : false # Whether to run pathseq for classification
+      microbe_bwa_image        : /data/database/pathseq_database/refv218/microbiome_RefseqV218_Compelete-Chromon.fasta.img # Path for kraken2 database
+      microbe_dict             : /data/database/pathseq_database/refv218/microbiome_RefseqV218_Compelete-Chromon.dict # Path for kraken2 database
+      host_bfi                 : /data/database/pathseq_database/refv218/pathseq_resources_pathseq_host.bfi # Path for kraken2 database
+      taxonomy_db              : /data/database/pathseq_database/refv218/microbiome_RefseqV218_Compelete-Chromon.db # Path for kraken2 database
+      host_bwa_image           : /data/database/pathseq_database/refv218/pathseq_resources_pathseq_host.fa.img # Path for kraken2 database
+      variousParams            : "" # Other pathseq parameters
+    pathseqscore: ""
+    metaphlan4:
+      do                       : false # Whether to run kraken2uniq for classification
+      sequence_type            : fastq
+      analysis_type            : "rel_ab_w_read_stats"
+      bowtie2db                : "/data/database/metaphlan_database/"
+      db_index                 : "mpa_vOct22_CHOCOPhlAnSGB_202212"
+      variousParams            : "" # Other metaphlan4 parameters
+    krakenuniq:
+      do                       : false
+      krakenuniq_database      : "/data/database/krakenuniq_database/krakuniq_refseqV218/"
+      estimate_precision       : 12
+      variousParams            : "" # Other krakenuniq parameters
+    krak_sample_denosing:
+      min_frac                 : 0.5
+      kmer_len                 : 35
+      min_dust                 : 0.1
+      min_entropy              : 1.2
+    krak_study_denosing:
+      min_reads                : 2
+      min_uniq                 : 2
+      cell_line                : /data/project/host-microbiome/microcat/microcat/single_wf/data/cell.lines.txt
+
+# Compute resource requirements
+resources:
+  cellranger:  
+    threads                    : 40        # Number of threads for Cell Ranger
+    mem_mb                     : 100000     # Memory in MB for Cell Ranger
+  starsolo:
+    threads                    : 40        # Number of threads for STARsolo 
+    mem_mb                     : 100000     # Memory in MB for STARsolo
+  samtools_extract:
+    threads                    : 20        # Number of threads for samtools
+    mem_mb                     : 40000      # Memory in MB for samtools
+  paired_bam_to_fastq:
+    threads                    : 20        # Number of threads for paired_bam_to_fastq
+    mem_mb                     : 40000      # Memory in MB for paired_bam_to_fastq
+  kraken2uniq:
+    threads                    : 40        # Number of threads for kraken2uniq
+    mem_mb                     : 300000     # Memory in MB for kraken2uniq
+  krakenuniq:
+    threads                    : 40        # Number of threads for krakenuniq
+    mem_mb                     : 100000     # Memory in MB for krakenuniq
+  metaphlan4:
+    threads                    : 20        # Number of threads for metaphlan
+    mem_mb                     : 100000     # Memory in MB for metaphlan
+  pathseq:
+    threads                    : 24        # Number of threads for pathseq  
+    mem_mb                     : 200000     # Memory in MB for pathseq
+  extract_kraken2_classified_output:
+    threads                    : 8
+    mem_mb                     : 4000     # Memory in MB for   
+  extract_kraken2_classified_bam:
+    threads                    : 1
+    mem_mb                     : 4000     # Memory in MB 
+  krak_sample_denosing:
+    threads                    : 8
+    mem_mb                     : 20000     # Memory in MB for krak_sample_denosing
+  krak2_matrix_build:
+    threads                    : 8
+    mem_mb                     : 4000     # Memory in MB for krak_sample_denosing
+#######################################################################################
+# Output directory settings
+output:
+  simulate                     : results/00.simulate    # Output folder for simulation
+  raw                          : results/00.raw              # Output folder for raw data
+  trimming                     : results/01.trimming    # Output folder for trimmed reads
+  host                         : results/02.host            # Output folder for host alignment
+  classifier                   : results/03.classifier # Output folder for taxonomy classification
+
+#######################################################################################  
+# Log directory settings
+logs:
+  prepare                      : "logs/00.prepare"       # Log folder for data preparation
+  host                         : "logs/02.host"             # Log folder for host alignment
+  classifier                   : "logs/03.classifier" # Log folder for taxonomy classification
+
+#######################################################################################
+# Benchmark directory settings  
+benchmarks:
+  host                         : "benchmarks/02.host"       # Benchmark folder for host alignment
+  classifier                   : "benchmarks/03.classifier" # Benchmark folder for taxonomy classification
+
+#######################################################################################
+# Data directory settings
+datas:
+  barcode_list_dirs:
+    tenX                       : "/data/project/host-microbiome/microcat/microcat/single_wf/data/" # Directory containing 10x barcodes
+
+#######################################################################################
+# Conda environment settings
+envs:
+  kraken2                      : ../envs/kraken2.yaml       # kraken2 conda environment
+  krakenuniq                   : ../envs/krakenuniq.yaml # krakenuniq conda environment
+  pathseq                      : ../envs/pathseq.yaml       # pathseq conda environment
+  metaphlan                    : ../envs/metaphlan.yaml   # metaphlan conda environment
+  kmer_qc                      : ../envs/kmer_qc.yaml       # kmer_qc conda environment
+  kmer_python                  : ../envs/kmer_python.yaml # kmer_python conda environment 
+  star                         : ../envs/star.yaml             # STAR conda environment
+
+#######################################################################################
+# Custom scripts
+scripts:
+  extract_kraken_output        : scripts/extract_kraken_output.py # Extract read assignments from kraken2 output
+  extract_kraken_bam           : scripts/extract_kraken_bam.py # Extract read assignments from kraken2 output
+  kraken2mpa                   : scripts/kraken2mpa.py # Convert kraken2 output to mpa format
+  kraken2sc                    : scripts/kraken2sc.py # Convert kraken2 output to silvacompatible format
+  extract_kraken_reads         : scripts/extract_kraken_reads.py # Extract classified reads from kraken2 output
+  krak2_output_denosing        : scripts/krak2_output_denosing.py # Denoise kraken2 output
+  krak_sample_denosing         : scripts/krak_sample_denosing.py # Sample-level denoising 
+  krak_study_denosing          : scripts/krak_study_denosing.py # Study-level denoising
+  spilt_bam_by_tag             : scripts/spilt_bam_by_tag.py # Split BAM by cell barcode
+  INVADEseq                    : scripts/INVADEseq.py # INVADE sequencing QC
+  starsolo_10X_auto            : scripts/starsolo_tenX_auto.sh # Wrapper script for STARsolo 10x pipeline

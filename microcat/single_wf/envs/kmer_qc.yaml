@@ -1,0 +1,16 @@
+# find env in scAmpi_single_cell_RNA/workflow/envs/identify_doublets.yaml
+channels:
+    - conda-forge
+    - bioconda
+    - r
+    - defaults
+dependencies:
+    - "r-base=4.2.3"
+    - "r-optparse=1.7.3"
+    - "r-tidyverse=2.0"
+    - "r-foreach=1.5.2"
+    - "r-doParallel=1.0.17"
+    - "r-stringr=1.5.0"
+    - "bioconductor-shortread=1.56.0"
+    - "r-data.table=1.14.8"
+    - "r-scales=1.2.1"

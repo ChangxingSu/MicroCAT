@@ -19,7 +19,7 @@ from microcat.sample import get_samples_id_by_patient
 from microcat.sample import get_samples_id_by_lane
 from microcat.sample import get_samples_id_by_library
 from microcat.sample import get_tissue_by_patient
-
+from microcat.sample import get_SAMattrRGline_by_sample
 from microcat.sample import get_SAMattrRGline_from_manifest
 
 from microcat.__about__ import __version__, __author__

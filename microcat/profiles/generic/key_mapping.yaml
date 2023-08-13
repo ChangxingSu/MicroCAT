@@ -1,0 +1,35 @@
+# only parameters defined in key_mapping (see below) are passed to the command in the order specified.
+system: "lsf" #check if system is defined below
+
+slurm:
+  command: 'sbatch --parsable --output=cluster_log/%j.out --error=cluster_log/%j.out'
+  key_mapping:
+    name: "--job-name={}"
+    threads: "--cpus-per-task={} -n1"
+    mem_mb: "--mem={}m"
+    account: "--account={}"
+    queue: "--partition={}"
+    time_min: "--time={}"
+pbs:
+  command: "qsub"
+  key_mapping:
+    name: "-N {}"
+    account: "-A {}"
+    queue: "-q {}"
+    threads: "-l nodes=1:ppn={}" # always use 1 node
+    mem_mb: "-l mem={}mb"
+    time_min: "-l walltime={}00" #min= seconds x 100
+lsf:
+  command: "bsub -e %J.log -o %J.log"
+  key_mapping:
+    queue: "-q {}"
+    name: "-J {}"
+    threads: "-n {}"
+    mem_mb: '-R "rusage[mem={}]" -C1'
+    account: "-P {}"
+# TODO: time_min    
+
+
+
+
+# for other cluster systems see: https://slurm.schedmd.com/rosetta.pdf

@@ -49,12 +49,22 @@ class MicrocatConfig:
         "logs"
     ]
 
-    def __init__(self, work_dir):
+    def __init__(self, work_dir,config_type):
+        if config_type == "single":
+            config_subdir = "single_wf"
+        elif config_type == "bulk":
+            config_subdir = "bulk_wf"
+        elif config_type == "spatial":
+            config_subdir = "spatial_wf"
+        elif config_type == "multi":
+            config_subdir = "multi_wf"
+        else:
+            raise ValueError("Invalid config_type")
         self.work_dir = os.path.realpath(work_dir)
         self.microcat_dir = os.path.dirname(os.path.abspath(__file__))
-        self.config_file = os.path.join(self.microcat_dir, "config", "config.yaml")
-        self.envs_dir = os.path.join(self.microcat_dir, "envs")
-        self.profiles_dir = os.path.join(self.microcat_dir, "profiles")
+        self.config_file = os.path.join(self.microcat_dir,config_subdir,"config", "config.yaml")
+        self.envs_dir = os.path.join(self.microcat_dir,config_subdir, "envs")
+        self.profiles_dir = os.path.join(self.microcat_dir,"profiles")
         self.new_config_file = os.path.join(self.work_dir, "config.yaml")
 
     def __str__(self):
@@ -69,11 +79,11 @@ class MicrocatConfig:
 Thanks for using microcat.
 A microbiome identification project has been created at %s
 if you want to create fresh conda environments:
-        microcat bulk_wf --conda-create-envs-only
-        microcat scRNA_wf --conda-create-envs-only
+        microcat run-local --conda-create-envs-only
+        microcat run-remote --conda-create-envs-only
 if you have environments:
-        microcat bulk_wf --help
-        microcat scRNA_wf --help
+        microcat run-local --help
+        microcat run-remote --help
 """ % (
             self.work_dir
         )
@@ -142,8 +152,8 @@ if you have environments:
                     shutil.copytree(os.path.join(self.profiles_dir, i), dest_dir)
         else:
             # Handle the case when 'profiles' directory does not exist
-            print("\033[93mWarning: The 'profiles' directory does not exist in the original folder.")
-            print("You can only run the program locally using the --run-local option.")
+            print("\033[93mWARNING: The 'profiles' directory does not exist in the original folder.")
+            print("You can only run the program locally using the run-local option.")
             print("If you want to run it on a cluster, please refer to the documentation for the 'cluster run' section.\033[0m")
             print("Skipping the profiles directory.")
 

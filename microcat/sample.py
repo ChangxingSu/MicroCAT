@@ -34,33 +34,41 @@ HEADERS = {
     "FQ": FQ_HEADERS
 }
 
-
 def parse_samples(sample_tsv, platform):
     samples_df = pd.read_csv(sample_tsv, sep="\t")
     
     # Check if id, fq1, fq2 columns exist
     if not set(['id', 'fq1', 'fq2']).issubset(samples_df.columns):
         raise ValueError("Columns 'id', 'fq1', 'fq2' must exist in the sample.tsv")
-    
+
     # Extract library, lane, and plate from id
     samples_df[['patient_tissue_lane_plate', 'library']] = samples_df['id'].str.rsplit("_", n=1, expand=True)
     
     # Determine the platform and parse accordingly
-    if platform == 'tenX':
+    if platform == 'lane':
         samples_df['is_lane'] = samples_df['patient_tissue_lane_plate'].apply(lambda x: x.split('_')[-1].startswith("L"))
         samples_df.loc[samples_df['is_lane'], 'lane'] = samples_df['patient_tissue_lane_plate'].apply(lambda x: x.split('_')[-1])
-    elif platform == 'smartseq':
+        # Extract patient and tissue, using the fact that tissue is always "S" followed by a number
+        # and is always the last part in patient_tissue
+        samples_df['patient_tissue'] = samples_df['patient_tissue_lane_plate'].apply(lambda x: '_'.join(x.split('_')[:-1]))
+        samples_df['tissue'] = samples_df['patient_tissue'].apply(lambda x: x.split('_')[-1])
+        samples_df['patient'] = samples_df['patient_tissue'].apply(lambda x: '_'.join(x.split('_')[:-1]))
+        samples_df = samples_df.drop(columns=['patient_tissue_lane_plate'])
+    elif platform == 'plate':
         samples_df['is_plate'] = samples_df['patient_tissue_lane_plate'].apply(lambda x: x.split('_')[-1].startswith("P"))
         samples_df.loc[samples_df['is_plate'], 'plate'] = samples_df['patient_tissue_lane_plate'].apply(lambda x: x.split('_')[-1])
+        samples_df['patient_tissue_cell'] = samples_df['patient_tissue_lane_plate'].apply(lambda x: '_'.join(x.split('_')[:-1]))
+        # Extract patient and tissue, using the fact that tissue is always "S" followed by a number
+        # and is always the last part in patient_tissue
+        samples_df['tissue'] = samples_df['patient_tissue_cell'].str.extract(r'(S\d+)_')
+        # 提取patient和cell
+        samples_df[['patient', 'cell']] = samples_df['patient_tissue_cell'].str.extract(r'(.+)_S\d+_(.+)')
+        samples_df = samples_df.drop(columns=['patient_tissue_lane_plate'])
+        samples_df = samples_df.drop(columns=['patient_tissue_cell'])
+        samples_df['patient_tissue'] = samples_df['patient'] + '_' + samples_df['tissue']
     else:
-        raise ValueError("Platform must be either 'tenX' or 'smartseq'")
-    
-    # Extract patient and tissue, using the fact that tissue is always "S" followed by a number
-    # and is always the last part in patient_tissue
-    samples_df['patient_tissue'] = samples_df['patient_tissue_lane_plate'].apply(lambda x: '_'.join(x.split('_')[:-1]))
-    samples_df['tissue'] = samples_df['patient_tissue'].apply(lambda x: x.split('_')[-1])
-    samples_df['patient'] = samples_df['patient_tissue'].apply(lambda x: '_'.join(x.split('_')[:-1]))
-    samples_df = samples_df.drop(columns=['patient_tissue_lane_plate'])
+        raise ValueError("Platform must be either 'lane' or 'plate'")
+
 
     if samples_df[['patient_tissue', 'library']].isnull().values.any():
         raise ValueError(f"id column must follow the format '{{Patient}}_{{tissue}}_{{lane or plate}}_{{library}}' for platform {platform}")
@@ -80,10 +88,21 @@ def parse_samples(sample_tsv, platform):
     samples_df['fastqs_dir'] = samples_df['fq1'].apply(lambda x: '/'.join(x.split('/')[:-1]))
     
     # Set index
-    if platform == 'tenX':
+    if platform == 'lane':
         samples_df = samples_df.set_index(["sample_id","patient", "tissue", "lane", "library"])
-    elif platform == 'smartseq':
-        samples_df = samples_df.set_index(["sample_id","patient", "tissue", "plate", "library"])
+    elif platform == 'plate':
+        samples_df = samples_df.set_index(["sample_id","patient", "cell","tissue", "plate", "library"])
+
+    # Check if fq1 and fq2 files exist
+    for _, row in samples_df.iterrows():
+        fq1_exists = os.path.isfile(row['fq1'])
+        if not fq1_exists:
+            raise FileNotFoundError(f"File not found: {row['fq1']}")
+        
+        if row['seq_type'] == 'paired-end':
+            fq2_exists = os.path.isfile(row['fq2'])
+            if not fq2_exists:
+                raise FileNotFoundError(f"File not found: {row['fq2']}")
 
     return samples_df
 
@@ -269,3 +288,18 @@ def get_SAMattrRGline_from_manifest(manifest_file):
     rgline = " , ".join([f"ID:{cell_id}" for cell_id in cell_ids])
     return rgline
 
+def get_SAMattrRGline_by_sample(samples_df, wildcards):
+    sample_id = wildcards.sample
+
+    # Filter samples based on sample_id and plate
+    samples_filtered = samples_df.loc[(samples_df.index.get_level_values("sample_id") == sample_id)]
+
+    # samples_filtered = samples_df.loc[(samples_df.index.get_level_values("sample_id") == sample_id) &
+    #                                 (samples_df.index.get_level_values("plate") == plate)]
+
+    # Get the cell IDs for the filtered samples
+    cell_ids = samples_filtered.index.get_level_values("cell").unique()
+
+    # Generate the --outSAMattrRGline input format
+    rgline = " , ".join([f"ID:{cell_id}" for cell_id in cell_ids])
+    return rgline

@@ -5,8 +5,8 @@ import gzip
 from ruamel.yaml import YAML
 
 MICROCAT_DIR = microcat.__path__[0]
-CONFIGS_DIR = os.path.join(MICROCAT_DIR, 'config')
-DEFAULT_DATA_DIR = os.path.join(MICROCAT_DIR, 'data')
+CONFIGS_DIR = os.path.join(MICROCAT_DIR,'single_wf','config')
+DEFAULT_DATA_DIR = os.path.join(MICROCAT_DIR,'single_wf', 'data')
 
 
 def download_file(url, destination):
@@ -33,7 +33,7 @@ def update_config_file(cell_white_list_path):
 
 
 # Create the data folder
-data_folder = os.path.join(MICROCAT_DIR, 'data')
+data_folder = os.path.join(MICROCAT_DIR,'single_wf','data')
 if not os.path.exists(data_folder):
     os.makedirs(data_folder)
 
