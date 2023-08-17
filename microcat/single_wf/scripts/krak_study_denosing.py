@@ -219,45 +219,58 @@ def main():
         # (kraken_reports_all['pval_reads_uniq'] < 0.05) &
         # (kraken_reports_all['corr_min_uniq'] > 0) &
         # (kraken_reports_all['pval_min_uniq'] < 0.05) ]
-        logger.info(f'Calculating quantile with containments', status='run')
+        # logger.info(f'Calculating quantile with containments', status='run')
 
-        cell_lines = pd.read_csv(celline_file,sep="\t")
-        # remove space
-        cell_lines['name'] = cell_lines['name'].str.strip() 
-        # replace space
-        cell_lines['name'] = cell_lines['name'].str.replace(' ', '_')
-        qtile = 0.99
-        quantiles = cell_lines[['name', 'taxid']]
+        # cell_lines = pd.read_csv(celline_file,sep="\t")
+        # # remove space
+        # cell_lines['name'] = cell_lines['name'].str.strip() 
+        # # replace space
+        # cell_lines['name'] = cell_lines['name'].str.replace(' ', '_')
+        # qtile = 0.99
+        # quantiles = cell_lines[['name', 'taxid']]
 
-        quantiles['CLrpmm_cellline'] = cell_lines.groupby('name')['rpmm'].transform(lambda x: 10 ** np.quantile(np.log10(x),qtile, interpolation='midpoint'))
-        quantiles= quantiles.drop_duplicates(subset=['name', 'taxid'], keep='first')
+        # quantiles['CLrpmm_cellline'] = cell_lines.groupby('name')['rpmm'].transform(lambda x: 10 ** np.quantile(np.log10(x),qtile, interpolation='midpoint'))
+        # quantiles= quantiles.drop_duplicates(subset=['name', 'taxid'], keep='first')
 
-        kraken_reports_all['CLrpmm_study'] = kraken_reports_all.groupby('sci_name')['rpmm'].transform(lambda x: 10 ** np.quantile(np.log10(x),qtile, interpolation='midpoint'))
-        # Process specific sample data
+        # kraken_reports_all['CLrpmm_study'] = kraken_reports_all.groupby('sci_name')['rpmm'].transform(lambda x: 10 ** np.quantile(np.log10(x),qtile, interpolation='midpoint'))
+        # # Process specific sample data
+        # kraken_reports_all['sample'] = kraken_reports_all['sample'].astype(str)
+        # kraken_reports_all['sample'] = kraken_reports_all['sample'].str.replace('/.*','')
+        # kraken_reports_all['sample'] = kraken_reports_all['sample'].str.replace('_krak_sample_denosing', '')
+        # kraken_reports_specific = kraken_reports_all.loc[kraken_reports_all['sample'] == sample_name]
+
+        # # Merge dataframes on 'name' 
+        # kraken_reports_specific = pd.merge(kraken_reports_specific, quantiles, 
+        #                 left_on='sci_name',
+        #                 right_on='name',
+        #                 how='left')
+        # # Perform SAHMI test for each taxon
+        # kraken_reports_specific['CLrpmm_cellline'] = kraken_reports_specific['CLrpmm_cellline'].fillna(0)
+        # kraken_reports_specific['SAHMI_test'] = kraken_reports_specific['CLrpmm_study'] > kraken_reports_specific['CLrpmm_cellline']
+        # filter_kraken_reports_specific = kraken_reports_specific.copy()[
+        #     (kraken_reports_specific['SAHMI_test'] == True)]
+        # # Log the number of rows after filtering
+        # # Log the completion of SAHMI test
+        # logger.info(f'SAHMI test completed.', status='complete')
+        # logger.info(f"Number of rows after filtering: {len(filter_kraken_reports_specific)}", status='summary')
+
+        # logger.info(f'Saving the result', status='run')
+        # # Save the filtered data to CSV
+        # filter_kraken_reports_specific.to_csv(out_path, sep='\t', index=False)
+        # logger.info(f'Finishing saving the result', status='complete')
+
+
+        # Log the 
+        logger.info(f'Could not caulate correlation and distrubtion since sample less than 5', status='complete')
         kraken_reports_all['sample'] = kraken_reports_all['sample'].astype(str)
         kraken_reports_all['sample'] = kraken_reports_all['sample'].str.replace('/.*','')
         kraken_reports_all['sample'] = kraken_reports_all['sample'].str.replace('_krak_sample_denosing', '')
         kraken_reports_specific = kraken_reports_all.loc[kraken_reports_all['sample'] == sample_name]
-
-        # Merge dataframes on 'name' 
-        kraken_reports_specific = pd.merge(kraken_reports_specific, quantiles, 
-                        left_on='sci_name',
-                        right_on='name',
-                        how='left')
-        # Perform SAHMI test for each taxon
-        kraken_reports_specific['CLrpmm_cellline'] = kraken_reports_specific['CLrpmm_cellline'].fillna(0)
-        kraken_reports_specific['SAHMI_test'] = kraken_reports_specific['CLrpmm_study'] > kraken_reports_specific['CLrpmm_cellline']
-        filter_kraken_reports_specific = kraken_reports_specific.copy()[
-            (kraken_reports_specific['SAHMI_test'] == True)]
-        # Log the number of rows after filtering
-        # Log the completion of SAHMI test
-        logger.info(f'SAHMI test completed.', status='complete')
-        logger.info(f"Number of rows after filtering: {len(filter_kraken_reports_specific)}", status='summary')
+        filter_kraken_reports_specific = kraken_reports_specific.copy()
 
         logger.info(f'Saving the result', status='run')
         # Save the filtered data to CSV
         filter_kraken_reports_specific.to_csv(out_path, sep='\t', index=False)
-        logger.info(f'Finishing saving the result', status='complete')
     else:
         # Log the 
         logger.info(f'Could not caulate correlation and distrubtion since sample less than 5', status='complete')

@@ -9,7 +9,7 @@ import os
 import argparse
 import multiprocessing as mp
 from multiprocessing import freeze_support
-
+import sys
 
 
 
@@ -230,13 +230,16 @@ def extract_ids(bamfile, krakenfile,child_parent, taxid_rank):
         if (type(kread_taxid) != int) and (kread_taxid.isdigit() == False):
             try:
                 # sometimes, the taxonomy is name (taxid #), sometimes it's just the number
-                kread_taxid = re.search('\(([^)]+)', kread_taxid).group(1)[6:]
+                # To handle situation like: `Blattabacterium sp. (Nauphoeta cinerea) (taxid 1316444)`
+                # kread_taxid = re.search('\(([^)]+)', kread_taxid).group(1)[6:]
+                kread_taxid = re.search(r'\(taxid (\d+)\)', kread_taxid).group(1)
                 # Store as species level id
                 kread_taxid = taxid_to_desired_rank(str(kread_taxid), 'species', child_parent, taxid_rank)
             except:
                 # in this case, something is wrong!
-                logging.debug("Here is an error. TaxID: {}".format(kread_taxid))
-                sys.exit()
+                logging.debug("Here is an error. Queryname: {}".format(sread.query_name))
+                # sys.exit()
+                continue
 
         # Make nested dictionary with cells and transcripts
         if sread_CB in nested_dict:

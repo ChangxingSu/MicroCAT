@@ -1,83 +1,157 @@
+localrules: generate_se_manifest_file, generate_pe_manifest_file
 
 if config["params"]["host"]["starsolo"]["do"]:
     if config["params"]["host"]["starsolo"]["soloType"]=="CB_UMI_Simple":
         # Auto detect 10x Genomics
         if config["params"]["host"]["starsolo"]["name"]=="tenX_AUTO":
-            rule starsolo_CB_UMI_Simple_count:
-                input:
-                    # Directory containing input fastq files
-                    fastqs_dir=lambda wildcards: microcat.get_fastqs_dir(SAMPLES,wildcards),
-                output:
-                    # Path to the output features.tsv file
-                    features_file = os.path.join(
-                        config["output"]["host"],
-                        "starsolo_count/{sample}/{sample}_features.tsv"),
-                    matrix_file = os.path.join(
-                        config["output"]["host"],
-                        "starsolo_count/{sample}/{sample}_matrix.mtx"),
-                    barcodes_file = os.path.join(
-                        config["output"]["host"],
-                        "starsolo_count/{sample}/{sample}_barcodes.tsv"),
-                    # Path to the output unmapped bam
-                    mapped_bam_file = os.path.join(
-                        config["output"]["host"],
-                        "starsolo_count/{sample}/Aligned_sortedByCoord_out.bam"),
-                    starsolo_count_report = os.path.join(
-                        config["output"]["host"],
-                        "starsolo_count/{sample}/Log.final.out")
-                params:
-                    barcode_reads = lambda wildcards: microcat.get_starsolo_sample_id(SAMPLES, wildcards, "fq1"),
-                    cdna_reads = lambda wildcards: microcat.get_starsolo_sample_id(SAMPLES, wildcards, "fq2"),
-                    starsolo_out = os.path.join(
-                        config["output"]["host"],
-                        "starsolo_count/"),
-                    starsolo_10X_auto = config["scripts"]["starsolo_10X_auto"],
-                    reference = config["params"]["host"]["starsolo"]["reference"],
-                    barcode_data_dir = config["datas"]["barcode_list_dirs"]["tenX"],
-                    variousParams = config["params"]["host"]["starsolo"]["variousParams"],
-                    outSAMattributes = config["params"]["host"]["starsolo"]["outSAMattributes"],
-                    soloUMIdedup = config["params"]["host"]["starsolo"]["algorithm"]["soloUMIdedup"],
-                    soloCBmatchWLtype = config["params"]["host"]["starsolo"]["algorithm"]["soloCBmatchWLtype"],
-                    soloUMIfiltering = config["params"]["host"]["starsolo"]["algorithm"]["soloUMIfiltering"],
-                    soloCellFilter = config["params"]["host"]["starsolo"]["algorithm"]["soloCellFilter"],
-                    clipAdapterType = config["params"]["host"]["starsolo"]["algorithm"]["clipAdapterType"],
-                    outFilterScoreMin = config["params"]["host"]["starsolo"]["algorithm"]["outFilterScoreMin"],
-                    soloMultiMappers = config["params"]["host"]["starsolo"]["algorithm"]["soloMultiMappers"],
-                    variousParams_command = "--variousParams {params.variousParams}" if config["params"]["host"]["starsolo"]["variousParams"] else "",
-                log:
-                    os.path.join(config["logs"]["host"],
-                                "starsolo/{sample}_starsolo_count.log")
-                benchmark:
-                    os.path.join(config["benchmarks"]["host"],
-                                "starsolo/{sample}_starsolo_count.benchmark")
-                conda:
-                    config["envs"]["star"]
-                resources:
-                    mem_mb=config["resources"]["starsolo"]["mem_mb"]
-                threads:
-                    config["resources"]["starsolo"]["threads"]
-                shell:
-                    '''
-                    mkdir -p {params.starsolo_out}; 
-                    cd {params.starsolo_out} ;
-                    
-                    bash {params.starsolo_10X_auto} \
-                    --barcode_reads {params.barcode_reads} \
-                    --cdna_reads {params.cdna_reads} \
-                    --barcode_data_dir {params.barcode_data_dir} \
-                    --sample {wildcards.sample} \
-                    --threads {threads} \
-                    --reference {params.reference} \
-                    --soloUMIdedup {params.soloUMIdedup} \
-                    --soloCBmatchWLtype {params.soloCBmatchWLtype} \
-                    --soloUMIfiltering {params.soloUMIfiltering} \
-                    --soloCellFilter {params.soloCellFilter} \
-                    --outFilterScoreMin {params.outFilterScoreMin} \
-                    --soloMultiMappers {params.soloMultiMappers} \
-                    --clipAdapterType {params.clipAdapterType}\
-                    {params.variousParams_command}\
-                    2>&1 | tee ../../../{log} ;
-                    '''
+            if config["params"]["host"]["starsolo"]["variousParams"]:
+                rule starsolo_CB_UMI_Simple_count:
+                    input:
+                        # Directory containing input fastq files
+                        fastqs_dir=lambda wildcards: microcat.get_fastqs_dir(SAMPLES,wildcards),
+                    output:
+                        # Path to the output features.tsv file
+                        features_file = os.path.join(
+                            config["output"]["host"],
+                            "starsolo_count/{sample}/{sample}_features.tsv"),
+                        matrix_file = os.path.join(
+                            config["output"]["host"],
+                            "starsolo_count/{sample}/{sample}_matrix.mtx"),
+                        barcodes_file = os.path.join(
+                            config["output"]["host"],
+                            "starsolo_count/{sample}/{sample}_barcodes.tsv"),
+                        # Path to the output unmapped bam
+                        mapped_bam_file = os.path.join(
+                            config["output"]["host"],
+                            "starsolo_count/{sample}/Aligned_sortedByCoord_out.bam"),
+                        starsolo_count_report = os.path.join(
+                            config["output"]["host"],
+                            "starsolo_count/{sample}/Log.final.out")
+                    params:
+                        barcode_reads = lambda wildcards: microcat.get_starsolo_sample_id(SAMPLES, wildcards, "fq1"),
+                        cdna_reads = lambda wildcards: microcat.get_starsolo_sample_id(SAMPLES, wildcards, "fq2"),
+                        starsolo_out = os.path.join(
+                            config["output"]["host"],
+                            "starsolo_count/"),
+                        starsolo_10X_auto = config["scripts"]["starsolo_10X_auto"],
+                        reference = config["params"]["host"]["starsolo"]["reference"],
+                        barcode_data_dir = config["datas"]["barcode_list_dirs"]["tenX"],
+                        variousParams = config["params"]["host"]["starsolo"]["variousParams"],
+                        outSAMattributes = config["params"]["host"]["starsolo"]["outSAMattributes"],
+                        soloUMIdedup = config["params"]["host"]["starsolo"]["algorithm"]["soloUMIdedup"],
+                        soloCBmatchWLtype = config["params"]["host"]["starsolo"]["algorithm"]["soloCBmatchWLtype"],
+                        soloUMIfiltering = config["params"]["host"]["starsolo"]["algorithm"]["soloUMIfiltering"],
+                        soloCellFilter = config["params"]["host"]["starsolo"]["algorithm"]["soloCellFilter"],
+                        clipAdapterType = config["params"]["host"]["starsolo"]["algorithm"]["clipAdapterType"],
+                        outFilterScoreMin = config["params"]["host"]["starsolo"]["algorithm"]["outFilterScoreMin"],
+                        soloMultiMappers = config["params"]["host"]["starsolo"]["algorithm"]["soloMultiMappers"],
+                    log:
+                        os.path.join(config["logs"]["host"],
+                                    "starsolo/{sample}_starsolo_count.log")
+                    benchmark:
+                        os.path.join(config["benchmarks"]["host"],
+                                    "starsolo/{sample}_starsolo_count.benchmark")
+                    conda:
+                        config["envs"]["star"]
+                    resources:
+                        mem_mb=config["resources"]["starsolo"]["mem_mb"]
+                    threads:
+                        config["resources"]["starsolo"]["threads"]
+                    shell:
+                        '''
+                            mkdir -p {params.starsolo_out}; 
+                            cd {params.starsolo_out} ;
+                            
+                            bash {params.starsolo_10X_auto} \
+                            --barcode_reads {params.barcode_reads} \
+                            --cdna_reads {params.cdna_reads} \
+                            --barcode_data_dir {params.barcode_data_dir} \
+                            --sample {wildcards.sample} \
+                            --threads {threads} \
+                            --reference {params.reference} \
+                            --soloUMIdedup {params.soloUMIdedup} \
+                            --soloCBmatchWLtype {params.soloCBmatchWLtype} \
+                            --soloUMIfiltering {params.soloUMIfiltering} \
+                            --soloCellFilter {params.soloCellFilter} \
+                            --outFilterScoreMin {params.outFilterScoreMin} \
+                            --soloMultiMappers {params.soloMultiMappers} \
+                            --clipAdapterType {params.clipAdapterType}\
+                            --variousParams '{params.variousParams}'\
+                            2>&1 | tee ../../../{log} ;
+                        '''
+            else:
+                rule starsolo_CB_UMI_Simple_count:
+                    input:
+                        # Directory containing input fastq files
+                        fastqs_dir=lambda wildcards: microcat.get_fastqs_dir(SAMPLES,wildcards),
+                    output:
+                        # Path to the output features.tsv file
+                        features_file = os.path.join(
+                            config["output"]["host"],
+                            "starsolo_count/{sample}/{sample}_features.tsv"),
+                        matrix_file = os.path.join(
+                            config["output"]["host"],
+                            "starsolo_count/{sample}/{sample}_matrix.mtx"),
+                        barcodes_file = os.path.join(
+                            config["output"]["host"],
+                            "starsolo_count/{sample}/{sample}_barcodes.tsv"),
+                        # Path to the output unmapped bam
+                        mapped_bam_file = os.path.join(
+                            config["output"]["host"],
+                            "starsolo_count/{sample}/Aligned_sortedByCoord_out.bam"),
+                        starsolo_count_report = os.path.join(
+                            config["output"]["host"],
+                            "starsolo_count/{sample}/Log.final.out")
+                    params:
+                        barcode_reads = lambda wildcards: microcat.get_starsolo_sample_id(SAMPLES, wildcards, "fq1"),
+                        cdna_reads = lambda wildcards: microcat.get_starsolo_sample_id(SAMPLES, wildcards, "fq2"),
+                        starsolo_out = os.path.join(
+                            config["output"]["host"],
+                            "starsolo_count/"),
+                        starsolo_10X_auto = config["scripts"]["starsolo_10X_auto"],
+                        reference = config["params"]["host"]["starsolo"]["reference"],
+                        barcode_data_dir = config["datas"]["barcode_list_dirs"]["tenX"],
+                        outSAMattributes = config["params"]["host"]["starsolo"]["outSAMattributes"],
+                        soloUMIdedup = config["params"]["host"]["starsolo"]["algorithm"]["soloUMIdedup"],
+                        soloCBmatchWLtype = config["params"]["host"]["starsolo"]["algorithm"]["soloCBmatchWLtype"],
+                        soloUMIfiltering = config["params"]["host"]["starsolo"]["algorithm"]["soloUMIfiltering"],
+                        soloCellFilter = config["params"]["host"]["starsolo"]["algorithm"]["soloCellFilter"],
+                        clipAdapterType = config["params"]["host"]["starsolo"]["algorithm"]["clipAdapterType"],
+                        outFilterScoreMin = config["params"]["host"]["starsolo"]["algorithm"]["outFilterScoreMin"],
+                        soloMultiMappers = config["params"]["host"]["starsolo"]["algorithm"]["soloMultiMappers"],
+                    log:
+                        os.path.join(config["logs"]["host"],
+                                    "starsolo/{sample}_starsolo_count.log")
+                    benchmark:
+                        os.path.join(config["benchmarks"]["host"],
+                                    "starsolo/{sample}_starsolo_count.benchmark")
+                    conda:
+                        config["envs"]["star"]
+                    resources:
+                        mem_mb=config["resources"]["starsolo"]["mem_mb"]
+                    threads:
+                        config["resources"]["starsolo"]["threads"]
+                    shell:
+                        '''
+                            mkdir -p {params.starsolo_out}; 
+                            cd {params.starsolo_out} ;
+                            
+                            bash {params.starsolo_10X_auto} \
+                            --barcode_reads {params.barcode_reads} \
+                            --cdna_reads {params.cdna_reads} \
+                            --barcode_data_dir {params.barcode_data_dir} \
+                            --sample {wildcards.sample} \
+                            --threads {threads} \
+                            --reference {params.reference} \
+                            --soloUMIdedup {params.soloUMIdedup} \
+                            --soloCBmatchWLtype {params.soloCBmatchWLtype} \
+                            --soloUMIfiltering {params.soloUMIfiltering} \
+                            --soloCellFilter {params.soloCellFilter} \
+                            --outFilterScoreMin {params.outFilterScoreMin} \
+                            --soloMultiMappers {params.soloMultiMappers} \
+                            --clipAdapterType {params.clipAdapterType}\
+                            2>&1 | tee ../../../{log} ;
+                        '''
         else:
             rule starsolo_CB_UMI_Simple_count:
                 input:
@@ -230,9 +304,17 @@ if config["params"]["host"]["starsolo"]["do"]:
             output:
                 PE_MANIFEST_FILE = os.path.join("data", "{sample}-pe-manifest.tsv")
             script:
-                "../scripts/generate_PE_manifest_file.py"       
-        
-        rule starsolo_smartseq_count:
+                "../scripts/generate_PE_manifest_file.py"      
+
+        rule generate_se_manifest_file:
+            input:
+                config["params"]["samples"],
+            output:
+                PE_MANIFEST_FILE = os.path.join("data", "{sample}-se-manifest.tsv")
+            script:
+                "../scripts/generate_SE_manifest_file.py"
+
+        rule starsolo_smartseq_PE_count:
             # Input files
             input:
                 # Path to the input manifest file
@@ -250,18 +332,18 @@ if config["params"]["host"]["starsolo"]["do"]:
                 # barcodes_file = os.path.join(
                 #     config["output"]["host"],
                 #     "starsolo_count/{sample}/barcodes.tsv"),
-                mapped_bam_file = os.path.join(
+                mapped_pe_bam_file = os.path.join(
                     config["output"]["host"],
-                    "starsolo_count/{sample}/Aligned_out.bam"),
+                    "starsolo_count_PE/{sample}/Aligned_out.bam"),
                 starsolo_count_report = os.path.join(
                     config["output"]["host"],
-                    "starsolo_count/{sample}/Log.final.out")
+                    "starsolo_count_PE/{sample}/Log.final.out")
             params:
-                cdna_reads = lambda wildcards: microcat.get_starsolo_sample_id(SAMPLES, wildcards, "fq2"),
+                cdna_reads = lambda wildcards: microcat.get_starsolo_sample_id(SAMPLES, wildcards, "fq1"),
                 # Path to the output directory
                 starsolo_out = os.path.join(
                     config["output"]["host"],
-                    "starsolo_count/"),
+                    "starsolo_count_PE/"),
                 # Path to the STAR index directory
                 reference = config["params"]["host"]["starsolo"]["reference"],
                 # Type of sequencing library
@@ -275,10 +357,10 @@ if config["params"]["host"]["starsolo"]["do"]:
                 variousParams = config["params"]["host"]["starsolo"]["variousParams"],
             log:
                 os.path.join(config["logs"]["host"],
-                            "starsolo/{sample}/starsolo_count_smartseq2.log")
+                            "starsolo/{sample}/starsolo_count_smartseq2_PE.log")
             benchmark:
                 os.path.join(config["benchmarks"]["host"],
-                            "starsolo/{sample}/starsolo_count_smartseq2.benchmark")
+                            "starsolo/{sample}/starsolo_count_smartseq2_PE.benchmark")
             conda:
                 config["envs"]["star"]
             resources:
@@ -288,49 +370,151 @@ if config["params"]["host"]["starsolo"]["do"]:
                 config["resources"]["starsolo"]["threads"]
             shell:
                 '''
-                if echo {params.cdna_reads} | grep -q "\.gz" ; then
-                    file_command='--readFilesCommand zcat'
-                else
-                    file_command=''
-                fi
+                if [ -s "{input.manifest}" ]; then
+                    if echo {params.cdna_reads} | grep -q "\.gz" ; then
+                        file_command='--readFilesCommand zcat'
+                    else
+                        file_command=''
+                    fi
 
-                mkdir -p {params.starsolo_out}; 
-                cd {params.starsolo_out} ;
-                STAR \
-                --soloType SmartSeq \
-                --genomeDir {params.reference} \
-                --readFilesManifest ../../../{input.manifest} \
-                --runThreadN {threads} \
-                --soloUMIdedup {params.soloUMIdedup} \
-                --soloStrand {params.soloStrand} \
-                --soloCellFilter {params.soloCellFilter}\
-                --outSAMtype BAM Unsorted\
-                $file_command \
-                --outSAMunmapped Within \
-                --outSAMattrRGline {params.SAMattrRGline}\
-                --outFileNamePrefix ./{wildcards.sample}/\
-                {params.variousParams} \
-                2>&1 | tee ../../../{log} ;
-                pwd ;\
-                cd ../../../;\
-                mv "{params.starsolo_out}/{wildcards.sample}/Aligned.out.bam" "{output.mapped_bam_file}";\
+                    mkdir -p {params.starsolo_out}; 
+                    cd {params.starsolo_out} ;
+                    STAR \
+                    --soloType SmartSeq \
+                    --genomeDir {params.reference} \
+                    --readFilesManifest ../../../{input.manifest} \
+                    --runThreadN {threads} \
+                    --soloUMIdedup {params.soloUMIdedup} \
+                    --soloStrand {params.soloStrand} \
+                    --soloCellFilter {params.soloCellFilter}\
+                    --outSAMtype BAM Unsorted\
+                    $file_command \
+                    --outSAMunmapped Within \
+                    --outSAMattrRGline {params.SAMattrRGline}\
+                    --outFileNamePrefix ./{wildcards.sample}/\
+                    {params.variousParams} \
+                    2>&1 | tee ../../../{log} ;
+                    pwd ;\
+                    cd ../../../;\
+                    mv "{params.starsolo_out}/{wildcards.sample}/Aligned.out.bam" "{output.mapped_pe_bam_file}";\
+                else
+                    touch "{output.mapped_pe_bam_file}"
+                    touch "{output.starsolo_count_report}"
+                fi
                 '''
-        rule starsolo_smartseq_extracted_sorted:
+        rule starsolo_smartseq_SE_count:
+            # Input files
             input:
-                mapped_bam_file = os.path.join(
+                # Path to the input manifest file
+                manifest = os.path.join("data", "{sample}-se-manifest.tsv"),
+            output:
+                # # Path to the output features.tsv file
+                # features_file = os.path.join(
+                #     config["output"]["host"],
+                #     "starsolo_count/{sample}/features.tsv"),
+                # # Path to the output matrix.mtx file
+                # matrix_file = os.path.join(
+                #     config["output"]["host"],
+                #     "starsolo_count/{sample}/matrix.mtx"),
+                # # Path to the output barcodes.tsv file
+                # barcodes_file = os.path.join(
+                #     config["output"]["host"],
+                #     "starsolo_count/{sample}/barcodes.tsv"),
+                mapped_se_bam_file = os.path.join(
                     config["output"]["host"],
-                    "starsolo_count/{sample}/Aligned_out.bam")
+                    "starsolo_count_SE/{sample}/Aligned_out.bam"),
+                starsolo_count_report = os.path.join(
+                    config["output"]["host"],
+                    "starsolo_count_SE/{sample}/Log.final.out")
+            params:
+                cdna_reads = lambda wildcards: microcat.get_starsolo_sample_id(SAMPLES, wildcards, "fq1"),
+                # Path to the output directory
+                starsolo_out = os.path.join(
+                    config["output"]["host"],
+                    "starsolo_count_SE/"),
+                # Path to the STAR index directory
+                reference = config["params"]["host"]["starsolo"]["reference"],
+                # Type of sequencing library
+                soloType = config["params"]["host"]["starsolo"]["soloType"],
+                soloUMIdedup = config["params"]["host"]["starsolo"]["algorithm"]["soloUMIdedup"],
+                soloCellFilter = config["params"]["host"]["starsolo"]["algorithm"]["soloCellFilter"],
+                soloStrand = config["params"]["host"]["starsolo"]["soloStrand"],
+                # SAMattrRGline = microcat.get_SAMattrRGline_from_manifest(config["params"]["host"]["starsolo"]["manifest"]),
+                SAMattrRGline = lambda wildcards: microcat.get_SAMattrRGline_by_sample(SAMPLES, wildcards),
+                # Additional parameters for STAR
+                variousParams = config["params"]["host"]["starsolo"]["variousParams"],
+            log:
+                os.path.join(config["logs"]["host"],
+                            "starsolo/{sample}/starsolo_count_smartseq2_SE.log")
+            benchmark:
+                os.path.join(config["benchmarks"]["host"],
+                            "starsolo/{sample}/starsolo_count_smartseq2_SE.benchmark")
+            conda:
+                config["envs"]["star"]
+            resources:
+                mem_mb=config["resources"]["starsolo"]["mem_mb"]
+            threads:
+                # Number of threads for STAR
+                config["resources"]["starsolo"]["threads"]
+            shell:
+                '''
+                if [ -s "{input.manifest}" ]; then
+                    if echo {params.cdna_reads} | grep -q "\.gz" ; then
+                        file_command='--readFilesCommand zcat'
+                    else
+                        file_command=''
+                    fi
+
+                    mkdir -p {params.starsolo_out}
+                    cd {params.starsolo_out}
+                    STAR \
+                    --soloType SmartSeq \
+                    --genomeDir {params.reference} \
+                    --readFilesManifest ../../../{input.manifest} \
+                    --runThreadN {threads} \
+                    --soloUMIdedup {params.soloUMIdedup} \
+                    --soloStrand {params.soloStrand} \
+                    --soloCellFilter {params.soloCellFilter} \
+                    --outSAMtype BAM Unsorted \
+                    $file_command \
+                    --outSAMunmapped Within \
+                    --outSAMattrRGline {params.SAMattrRGline} \
+                    --outFileNamePrefix ./{wildcards.sample}/ \
+                    {params.variousParams} \
+                    2>&1 | tee ../../../{log}
+                    pwd
+                    cd ../../../
+                    mv "{params.starsolo_out}/{wildcards.sample}/Aligned.out.bam" "{output.mapped_se_bam_file}"
+                else
+                    touch "{output.mapped_se_bam_file}"
+                    touch "{output.starsolo_count_report}"
+                fi
+                '''
+        rule starsolo_smartseq_combined_bam:
+            input:
+                mapped_se_bam_file = os.path.join(
+                    config["output"]["host"],
+                    "starsolo_count_SE/{sample}/Aligned_out.bam"),
+                mapped_pe_bam_file = os.path.join(
+                    config["output"]["host"],
+                    "starsolo_count_PE/{sample}/Aligned_out.bam")
             output:
                 unmapped_sorted_bam_file = os.path.join(
                     config["output"]["host"],
                     "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam"),
                 unmapped_bam_sorted_index = os.path.join(
                         config["output"]["host"],
-                        "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bai")
+                        "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bai"),
             params:
                 unmapped_bam_unsorted_file = temp(os.path.join(
                     config["output"]["host"],
-                    "unmapped_host/{sample}/Aligned_out_unmapped.bam"))
+                    "unmapped_host/{sample}/Aligned_out_unmapped.bam")),
+                unmapped_se_bam_unsorted_file = temp(os.path.join(
+                    config["output"]["host"],
+                    "unmapped_host/{sample}/Aligned_out_unmapped_SE.bam")),
+                unmapped_pe_bam_unsorted_file = temp(os.path.join(
+                    config["output"]["host"],
+                    "unmapped_host/{sample}/Aligned_out_unmapped_PE.bam"))
             log:
                 os.path.join(config["logs"]["host"],
                             "starsolo/{sample}/unmapped_sorted_bam.log")
@@ -345,11 +529,61 @@ if config["params"]["host"]["starsolo"]["do"]:
                 mem_mb=config["resources"]["samtools_extract"]["mem_mb"],
             shell:
                 '''
-                samtools view --threads  {threads}  -b -f 4   {input.mapped_bam_file}  >  {params.unmapped_bam_unsorted_file};\
+                if [ -s "{input.mapped_se_bam_file}" ] && [ -s "{input.mapped_pe_bam_file}" ]; then
+                    samtools view --threads {threads} -b -f 4 {input.mapped_se_bam_file} > {params.unmapped_se_bam_unsorted_file}
+                    samtools view --threads {threads} -b -f 4 {input.mapped_pe_bam_file} > {params.unmapped_pe_bam_unsorted_file}
+                    samtools merge -@ {threads} {params.unmapped_bam_unsorted_file} {params.unmapped_pe_bam_unsorted_file} {params.unmapped_se_bam_unsorted_file}
+                    rm -rf {params.unmapped_se_bam_unsorted_file}
+                    rm -rf {params.unmapped_se_bam_unsorted_file}
+                elif [ -s "{input.mapped_pe_bam_file}" ]; then
+                    samtools view --threads {threads} -b -f 4 {input.mapped_pe_bam_file} > {params.unmapped_bam_unsorted_file}
+                elif [ -s "{input.mapped_se_bam_file}" ]; then
+                    samtools view --threads {threads} -b -f 4 {input.mapped_se_bam_file} > {params.unmapped_bam_unsorted_file}
+                else
+                    echo "Both mapped BAM files are empty! Exiting..."
+                    exit 1
+                fi
+
                 samtools sort -n  --threads  {threads} {params.unmapped_bam_unsorted_file} -o {output.unmapped_sorted_bam_file};\
                 samtools index -@  {threads} {output.unmapped_sorted_bam_file} -o {output.unmapped_bam_sorted_index};\
+                
                 rm -rf {params.unmapped_bam_unsorted_file}
                 '''
+        # rule starsolo_smartseq_extracted_sorted:
+        #     input:
+        #         mapped_bam_file = os.path.join(
+        #             config["output"]["host"],
+        #             "starsolo_count/{sample}/Aligned_out.bam")
+        #     output:
+        #         unmapped_sorted_bam_file = os.path.join(
+        #             config["output"]["host"],
+        #             "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam"),
+        #         unmapped_bam_sorted_index = os.path.join(
+        #                 config["output"]["host"],
+        #                 "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bai")
+        #     params:
+        #         unmapped_bam_unsorted_file = temp(os.path.join(
+        #             config["output"]["host"],
+        #             "unmapped_host/{sample}/Aligned_out_unmapped.bam"))
+        #     log:
+        #         os.path.join(config["logs"]["host"],
+        #                     "starsolo/{sample}/unmapped_sorted_bam.log")
+        #     benchmark:
+        #         os.path.join(config["benchmarks"]["host"],
+        #                     "starsolo/{sample}/unmapped_sorted_bam.benchmark")
+        #     threads:
+        #         config["resources"]["samtools_extract"]["threads"]
+        #     conda:
+        #         config["envs"]["star"]
+        #     resources:
+        #         mem_mb=config["resources"]["samtools_extract"]["mem_mb"],
+        #     shell:
+        #         '''
+        #         samtools view --threads  {threads}  -b -f 4   {input.mapped_bam_file}  >  {params.unmapped_bam_unsorted_file};\
+        #         samtools sort -n  --threads  {threads} {params.unmapped_bam_unsorted_file} -o {output.unmapped_sorted_bam_file};\
+        #         samtools index -@  {threads} {output.unmapped_sorted_bam_file} -o {output.unmapped_bam_sorted_index};\
+        #         rm -rf {params.unmapped_bam_unsorted_file}
+        #         '''
 
         # rule starsolo_smartseq_unmapped_sorted_bam:
         #     input:

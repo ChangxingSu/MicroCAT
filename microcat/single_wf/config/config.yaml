@@ -72,8 +72,8 @@ params:
     krak_sample_denosing:
       min_frac                 : 0.5
       kmer_len                 : 35
-      min_dust                 : 0.1
-      min_entropy              : 1.2
+      min_dust                 : 0.08
+      min_entropy              : 1.5
     krak_study_denosing:
       min_reads                : 2
       min_uniq                 : 2
@@ -85,7 +85,7 @@ resources:
     threads                    : 40        # Number of threads for Cell Ranger
     mem_mb                     : 100000     # Memory in MB for Cell Ranger
   starsolo:
-    threads                    : 40        # Number of threads for STARsolo 
+    threads                    : 20        # Number of threads for STARsolo 
     mem_mb                     : 100000     # Memory in MB for STARsolo
   samtools_extract:
     threads                    : 20        # Number of threads for samtools
@@ -94,8 +94,8 @@ resources:
     threads                    : 20        # Number of threads for paired_bam_to_fastq
     mem_mb                     : 40000      # Memory in MB for paired_bam_to_fastq
   kraken2uniq:
-    threads                    : 40        # Number of threads for kraken2uniq
-    mem_mb                     : 300000     # Memory in MB for kraken2uniq
+    threads                    : 20        # Number of threads for kraken2uniq
+    mem_mb                     : 120000     # Memory in MB for kraken2uniq
   krakenuniq:
     threads                    : 40        # Number of threads for krakenuniq
     mem_mb                     : 100000     # Memory in MB for krakenuniq
@@ -170,3 +170,4 @@ scripts:
   spilt_bam_by_tag             : scripts/spilt_bam_by_tag.py # Split BAM by cell barcode
   INVADEseq                    : scripts/INVADEseq.py # INVADE sequencing QC
   starsolo_10X_auto            : scripts/starsolo_tenX_auto.sh # Wrapper script for STARsolo 10x pipeline
+  bam2fastq                    : scripts/paired_bam_to_fastq_script.sh # Wrapper script for bam convert to fastq

@@ -31,8 +31,12 @@ samples_df = samples_df.reset_index()
 
 # Extract required columns from the parsed samples DataFrame
 manifest_df = samples_df[['fq1', 'fq2', 'cell']]
+# Check if fq2 is non-empty for any rows
+if any(samples_df['fq2'].notna()):
+    warnings.warn("WARNING: Detected samples with both single-end and paired-end sequencing data.")
 
-# Filter out rows where fq2 is NaN
-manifest_df = manifest_df[manifest_df['fq2'].notna()]
+# Remove rows where fq2 is not empty (not NaN)
+manifest_df = manifest_df[manifest_df['fq2'].isna()]
 
+manifest_df['fq2'] = manifest_df['fq2'].fillna('-')
 manifest_df.to_csv(snakemake.output[0], sep='\t', index=False, header=False)

@@ -82,6 +82,9 @@ while [[ "$#" -gt 0 ]]; do
   esac
 done
 
+if [ -z "$variousParams" ]; then
+  variousParams=""
+fi
 
 green=$(tput setaf 2)
 blue=$(tput setaf 4)
@@ -278,8 +281,7 @@ STAR --runThreadN $threads --genomeDir $reference --readFilesIn {$sample}.test.R
     --soloUMIlen $UMILEN --soloStrand Forward \
     --soloUMIdedup 1MM_CR --soloCBmatchWLtype 1MM_multi_Nbase_pseudocounts --soloUMIfiltering MultiGeneUMI_CR \
     --soloCellFilter EmptyDrops_CR --clipAdapterType CellRanger4 --outFilterScoreMin 30 \
-    --soloFeatures Gene GeneFull --soloOutFileNames $report_dir/ features.tsv barcodes.tsv matrix.mtx  
-
+    --soloFeatures Gene GeneFull --soloOutFileNames $report_dir/ features.tsv barcodes.tsv matrix.mtx
 
 ## the following is needed in case of bad samples: when a low fraction of reads come from mRNA, experiment will look falsely reverse-stranded
 report="${sample}_test_strand/GeneFull/Summary.csv"

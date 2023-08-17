@@ -7,7 +7,18 @@ rule paired_bam_to_fastq:
     output:
         unmapped_fastq = temp(os.path.join(
             config["output"]["host"],
-            "unmapped_host/{sample}/{sample}_unmappped2human_bam.fastq"))
+            "unmapped_host/{sample}/{sample}_unmappped2human_bam.fastq")),
+        unmapped_r1_fastq = temp(os.path.join(
+            config["output"]["host"],
+            "unmapped_host/{sample}/{sample}_unmappped2human_bam_r1.fastq")),
+        unmapped_r2_fastq = temp(os.path.join(
+            config["output"]["host"],
+            "unmapped_host/{sample}/{sample}_unmappped2human_bam_r2.fastq"))
+    # log:
+    #     os.path.join(config["logs"]["host"],
+    #                 "bam2fastq/{sample}_bam_convert_fastq.log")
+    params:
+        bam2fastq_script = config["scripts"]["bam2fastq"],
     threads:
         config["resources"]["paired_bam_to_fastq"]["threads"]
     resources:
@@ -17,8 +28,9 @@ rule paired_bam_to_fastq:
         config["envs"]["star"]
     shell:
         '''
-        samtools fastq --threads {threads}  -n {input.unmapped_bam_sorted_file}  > {output.unmapped_fastq}
+        bash {params.bam2fastq_script} {input.unmapped_bam_sorted_file} {output.unmapped_r1_fastq} {output.unmapped_r2_fastq} {output.unmapped_fastq} {threads}
         '''
+
 
 
 if config["params"]["classifier"]["kraken2uniq"]["do"]:
@@ -26,14 +38,14 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
         input:
             unmapped_fastq = os.path.join(
                 config["output"]["host"],
-                "unmapped_host/{sample}/{sample}_unmappped2human_bam.fastq")
+                "unmapped_host/{sample}/{sample}_unmappped2human_bam.fastq"),
+            unmapped_r1_fastq = os.path.join(
+                config["output"]["host"],
+                "unmapped_host/{sample}/{sample}_unmappped2human_bam_r1.fastq"),
+            unmapped_r2_fastq = os.path.join(
+                config["output"]["host"],
+                "unmapped_host/{sample}/{sample}_unmappped2human_bam_r2.fastq")
         output:
-            krak2_classified_output_fq = os.path.join(
-                config["output"]["classifier"],
-                "rmhost_classified_output/{sample}/{sample}_kraken2_classified.fq"),
-            krak2_unclassified_output_fq = os.path.join(
-                config["output"]["classifier"],
-                "rmhost_unclassified_output/{sample}/{sample}_kraken2_unclassified.fq"),
             krak2_output = os.path.join(
                 config["output"]["classifier"],
                 "rmhost_kraken2_output/{sample}/{sample}_kraken2_output.txt"),
@@ -51,12 +63,18 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
             kraken2mpa_script = config["scripts"]["kraken2mpa"],
             variousParams = config["params"]["classifier"]["kraken2uniq"]["variousParams"],
             #since kraken2 acquire specific input fomrat "#fq",so we put it it params
-            # krak2_classified_output=os.path.join(
-            #     config["output"]["classifier"],
-            #     "classified_output/{sample}/{sample}_kraken2_classified#.fq"),
-            # krak2_unclassified_output=os.path.join(
-            #     config["output"]["classifier"],
-            #     "unclassified_output/{sample}/{sample}_kraken2_unclassified#.fq")
+            krak2_classified_output_fq_pair=os.path.join(
+                config["output"]["classifier"],
+                "classified_output/{sample}/{sample}_kraken2_classified#.fq"),
+            krak2_unclassified_output_fq_pair=os.path.join(
+                config["output"]["classifier"],
+                "unclassified_output/{sample}/{sample}_kraken2_unclassified#.fq"),
+            krak2_classified_output_fq = os.path.join(
+                config["output"]["classifier"],
+                "rmhost_classified_output/{sample}/{sample}_kraken2_classified.fq"),
+            krak2_unclassified_output_fq = os.path.join(
+                config["output"]["classifier"],
+                "rmhost_unclassified_output/{sample}/{sample}_kraken2_unclassified.fq"),
         resources:
             mem_mb=config["resources"]["kraken2uniq"]["mem_mb"]
         priority: 12
@@ -72,18 +90,35 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
             config["envs"]["kraken2"]
         shell:
             '''
-            kraken2 --db {params.database} \
-            --threads {threads} \
-            --classified-out {output.krak2_classified_output_fq}\
-            --unclassified-out {output.krak2_unclassified_output_fq}\
-            --output {output.krak2_output} \
-            --report {output.krak2_report} \
-            --report-minimizer-data \
-            {input.unmapped_fastq} \
-            --use-names \
-            --memory-mapping \
-            {params.variousParams} \
-            2>&1 | tee {log};\
+            if [ -s "{input.unmapped_fastq}" ]; then
+                kraken2 --db {params.database} \
+                --threads {threads} \
+                --output {output.krak2_output} \
+                --report {output.krak2_report} \
+                --classified-out {params.krak2_classified_output_fq}\
+                --unclassified-out {params.krak2_unclassified_output_fq}\
+                --report-minimizer-data \
+                {input.unmapped_fastq} \
+                --use-names \
+                --memory-mapping \
+                {params.variousParams} \
+                2>&1 | tee {log};\
+            else
+                kraken2 --db {params.database} \
+                --threads {threads} \
+                --output {output.krak2_output} \
+                --report {output.krak2_report} \
+                --classified-out {params.krak2_classified_output_fq_pair}\
+                --unclassified-out {params.krak2_unclassified_output_fq_pair}\
+                --report-minimizer-data \
+                {input.unmapped_r1_fastq} {input.unmapped_r2_fastq}\
+                --use-names \
+                --memory-mapping \
+                --paired \
+                {params.variousParams} \
+                2>&1 | tee {log};\
+            fi
+
             cut -f 1-3,6-8 {output.krak2_report} > {output.krak2_std_report};\
             python {params.kraken2mpa_script} -r {output.krak2_std_report} -o {output.krak2_mpa_report};
             '''
@@ -742,8 +777,14 @@ if config["params"]["classifier"]["metaphlan4"]["do"]:
     rule metaphlan_classified:
         input:  
             unmapped_fastq = os.path.join(
-                            config["output"]["host"],
-                            "unmapped_host/{sample}/{sample}_unmappped2human_bam.fastq")
+                config["output"]["host"],
+                "unmapped_host/{sample}/{sample}_unmappped2human_bam.fastq"),
+            unmapped_r1_fastq = os.path.join(
+                config["output"]["host"],
+                "unmapped_host/{sample}/{sample}_unmappped2human_bam_r1.fastq"),
+            unmapped_r2_fastq = os.path.join(
+                config["output"]["host"],
+                "unmapped_host/{sample}/{sample}_unmappped2human_bam_r2.fastq")
         output:
             mpa_bowtie2_out=os.path.join(
                 config["output"]["classifier"],
@@ -758,7 +799,7 @@ if config["params"]["classifier"]["metaphlan4"]["do"]:
             analysis_type = config["params"]["classifier"]["metaphlan4"]["analysis_type"],
             variousParams = config["params"]["classifier"]["metaphlan4"]["variousParams"] 
         threads:
-            config["params"]["classifier"]["metaphlan4"]["threads"]
+            config["resources"]["metaphlan4"]["threads"]
         benchmark:
             os.path.join(config["benchmarks"]["classifier"],
                         "rmhost_metaphlan_classifier/{sample}/{sample}_metaphalan4_classifier_benchmark.log")
@@ -768,20 +809,34 @@ if config["params"]["classifier"]["metaphlan4"]["do"]:
         conda:
             config["envs"]["metaphlan"]
         resources:
-            config["params"]["classifier"]["metaphlan4"]["mem_mb"]
+            mem_mb = config["resources"]["metaphlan4"]["mem_mb"]
         shell:
             '''
-            metaphlan {input.unmapped_fastq} \
-            -t {params.analysis_type} \
-            --bowtie2out {output.mpa_bowtie2_out} \
-            -o {output.mpa_profile_out} \
-            --unclassified_estimation \
-            --nproc {threads} \
-            --input_type {params.sequence_type} \
-            --bowtie2db {params.bowtie2db}  \
-            --index {params.db_index} \
-            {params.variousParams}\
-            2>&1 | tee {log}; \
+            if [ -s "{input.unmapped_fastq}" ]; then
+                metaphlan {input.unmapped_fastq} \
+                -t {params.analysis_type} \
+                --bowtie2out {output.mpa_bowtie2_out} \
+                -o {output.mpa_profile_out} \
+                --unclassified_estimation \
+                --nproc {threads} \
+                --input_type {params.sequence_type} \
+                --bowtie2db {params.bowtie2db}  \
+                --index {params.db_index} \
+                {params.variousParams}\
+                2>&1 | tee {log}; \
+            else
+                metaphlan {input.unmapped_r1_fastq} {input.unmapped_r2_fastq} \
+                -t {params.analysis_type} \
+                --bowtie2out {output.mpa_bowtie2_out} \
+                -o {output.mpa_profile_out} \
+                --unclassified_estimation \
+                --nproc {threads} \
+                --input_type {params.sequence_type} \
+                --bowtie2db {params.bowtie2db}  \
+                --index {params.db_index} \
+                {params.variousParams}\
+                2>&1 | tee {log}; \
+            fi
             '''
 
     # rule mergeprofiles:

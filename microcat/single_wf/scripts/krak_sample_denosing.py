@@ -338,7 +338,7 @@ def main():
     kmer_df =[]
     # desired_krak_report['ncbi_taxa'] = desired_krak_report['ncbi_taxa'].astype(str)
     desired_krak_report['species_level_taxid'] = desired_krak_report['species_level_taxid'].astype(str)
-    desired_species_taxid_list = set(desired_krak_report['species_level_taxid'].unique())
+    desired_taxid_list = set(desired_krak_report['ncbi_taxa'].unique())
     # Specify the number of processes to use (e.g., 4)
     num_processes = int(args.num_processes)
     manager = Manager()
@@ -381,7 +381,7 @@ def main():
     kmer_key = "kmer_count"
     start_pos_key = "start_pos"
     end_pos_key = "end_pos"
-    species_level_taxid_key = "species_taxid"
+    species_level_taxid_key = "species_level_taxid"
     # Init bam count
     read_count = 0
     use_count = 0
@@ -494,7 +494,7 @@ def main():
     cb_taxid_ub_kmer_count_df = pd.DataFrame(data)
     # Del data
     del data
-
+    del cb_taxid_to_ub_kmers
     # Convert the DataFrame to long format, each row contains a kmer
     cb_taxid_ub_kmer_count_df = cb_taxid_ub_kmer_count_df.explode('kmers').explode('UB')
 
@@ -512,7 +512,8 @@ def main():
 
     cb_taxid_kmer_count_df = pd.merge(total_kmer_counts, unique_kmer_counts, on=['CB', 'species_level_taxid'])
     cb_taxid_kmer_count_df = pd.merge(cb_taxid_kmer_count_df,global_unique_kmer_counts, on=['CB', 'species_level_taxid'])
-
+    del cb_taxid_ub_global_unique_count_df
+    del cb_taxid_ub_kmer_count_df
     cb_taxid_kmer_corr_df = cb_taxid_kmer_count_df.groupby('species_level_taxid').apply(calc_correlation).reset_index()
     logger.info(f'Finishing getting the raw classified reads from bam file', status='complete')
     logger.info(f'Calculating quality control indicators', status='run')
@@ -550,8 +551,8 @@ def main():
     # final_desired_krak_report.drop('species_level_taxid', axis=1, inplace=True)
 
     final_desired_krak_report['superkingdom'] = final_desired_krak_report.apply(lambda x: taxid_to_desired_rank(str(x['ncbi_taxa']),'superkingdom', child_parent, taxid_rank), axis=1)
-    final_desired_krak_report['bacteria_mean_cov_cutoff'] = bacteria_mean_cov/10
-    final_desired_krak_report['archaea_mean_cov_cutoff'] = archaea_mean_cov/10
+    final_desired_krak_report['bacteria_mean_cov_cutoff'] = bacteria_mean_cov/50
+    final_desired_krak_report['archaea_mean_cov_cutoff'] = archaea_mean_cov/50
 
     logger.info(f'Finishging calculating quality control indicators', status='complete')
 
@@ -573,8 +574,8 @@ def main():
             (final_desired_krak_report['average_seq_dust_score'] > args.min_dust) &
             (
                 (
-                    ((final_desired_krak_report['superkingdom'] == '2') & (final_desired_krak_report['max_cov']*10 >=  bacteria_mean_cov)) |
-                    ((final_desired_krak_report['superkingdom'] == '2157')& (final_desired_krak_report['max_cov']*10 >=  archaea_mean_cov)) |
+                    ((final_desired_krak_report['superkingdom'] == '2') & (final_desired_krak_report['max_cov']*50 >=  bacteria_mean_cov)) |
+                    ((final_desired_krak_report['superkingdom'] == '2157')& (final_desired_krak_report['max_cov']*50 >=  archaea_mean_cov)) |
                     ((final_desired_krak_report['superkingdom'] == '2759') & (final_desired_krak_report['max_cov'] >  0)) |
                     ((final_desired_krak_report['superkingdom'] == '10239') & (final_desired_krak_report['max_cov'] >  0)) 
                 )
@@ -623,4 +624,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
