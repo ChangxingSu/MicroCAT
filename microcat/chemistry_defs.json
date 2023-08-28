@@ -501,7 +501,7 @@
     "algorithm": [
       {
         "soloUMIdedup": "1MM All",
-        "soloCBmatchWLtype": "1MM multi",
+        "soloCBmatchWLtype": "1MM",
         "soloUMIfiltering": "-",
         "soloCellFilter": "CellRanger2.2 3000 0.99 10",
         "clipAdapterType": "Hamming",
@@ -510,30 +510,70 @@
       }
     ]
   },
-  "indrops_v1": {
+  "indrop_v1": {
     "barcode": [
       {
         "soloCBposition": "0_0_2_-1 3_1_3_8",
-        "soloCBwhitelist": "None",
+        "soloCBwhitelist": "",
         "soloBarcodeMate": 0,
         "soloUMIposition": "3_9_3_14",
         "clip5pNbases": "0",
-        "clip3pNbases": "0"
-
+        "clip3pNbases": "0",
+        "soloCBwhitelist": {
+          "barcode_1": "indrop_V1and2_BC1.txt",
+          "barcode_2": "indrop_V1and2_BC2.txt"
+        }
       }
     ],
-    "description": "Dropseq",
+    "description": "indrop Version 1",
     "soloType": "CB_UMI_Complex",
     "soloStrand": "Forward",
     "outSAMattributes": "NH HI AS nM CB UB CR CY UR UY GX GN",
+    "outSAMtype": "BAM SortedByCoordinate",
     "soloAdapterSequence": "GAGTGATTGCTTGTGACGCCTT",
-    "name": "Dropseq",
+    "name": "Indrop_v1",
     "algorithm": [
       {
         "soloUMIdedup": "1MM",
-        "soloCBmatchWLtype": "1MM multi",
+        "soloCBmatchWLtype": "1MM",
         "soloUMIfiltering": "-",
-        "soloCellFilter": "CellRanger2.2 3000 0.99 10",
+        "soloAdapterMismatchesNmax": 3,
+        "soloCellFilter": "EmptyDrops_CR",
+        "clipAdapterType": "Hamming",
+        "outFilterScoreMin": 0,
+        "soloMultiMappers": "EM"
+      }
+    ]
+  },
+  "indrop_v2": {
+    "barcode": [
+      {
+        "soloCBposition": "0_0_2_-1 3_1_3_8",
+        "soloCBwhitelist": "",
+        "soloBarcodeMate": 0,
+        "soloUMIposition": "3_9_3_14",
+        "clip5pNbases": "0",
+        "clip3pNbases": "0",
+        "soloCBwhitelist": {
+          "barcode_1": "indrop_V1and2_BC1.txt",
+          "barcode_2": "indrop_V1and2_BC2.txt"
+        }
+      }
+    ],
+    "description": "indrop Version 2",
+    "soloType": "CB_UMI_Complex",
+    "soloStrand": "Reverse",
+    "outSAMattributes": "NH HI AS nM CB UB CR CY UR UY GX GN",
+    "outSAMtype": "BAM SortedByCoordinate",
+    "soloAdapterSequence": "GAGTGATTGCTTGTGACGCCTT",
+    "name": "Indrop_v2",
+    "algorithm": [
+      {
+        "soloUMIdedup": "1MM",
+        "soloCBmatchWLtype": "1MM",
+        "soloUMIfiltering": "-",
+        "soloAdapterMismatchesNmax": 3,
+        "soloCellFilter": "EmptyDrops_CR",
         "clipAdapterType": "Hamming",
         "outFilterScoreMin": 0,
         "soloMultiMappers": "EM"

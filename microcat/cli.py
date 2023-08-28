@@ -235,7 +235,7 @@ def init():
               prompt='Select what host process software you use')
 @click.option('--chemistry', type=click.Choice(['smartseq', 'smartseq2', 'tenx_3pv1', 'tenx_3pv2',
                                                 'tenx_3pv3', 'seqwell', 'tenx_auto', 'dropseq',
-                                                'tenx_multiome', 'tenx_5ppe', 'seqwell', 'celseq2']),
+                                                'tenx_multiome', 'tenx_5ppe', 'seqwell', 'indrop_v1','indrop_v2','celseq2']),
               default="tenx_auto",
               show_default=True,
               help='Sequencing chemistry option, required when host is starsolo',
@@ -382,7 +382,7 @@ def single_init(
               prompt='Select what host you use')
 @click.option('--chemistry', type=click.Choice(['smartseq', 'smartseq2', 'tenx_3pv1', 'tenx_3pv2',
                                                 'tenx_3pv3', 'seqwell', 'tenx_auto', 'dropseq',
-                                                'tenx_multiome', 'tenx_5ppe', 'seqwell', 'celseq2']),
+                                                'tenx_multiome', 'tenx_5ppe', 'seqwell','indrop_v1','celseq2']),
               default=None, help='Sequencing chemistry option, required when host is starsolo')
 @click.option('--classifier',
               default='pathseq',

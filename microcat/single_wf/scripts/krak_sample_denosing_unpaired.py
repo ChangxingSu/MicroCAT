@@ -247,6 +247,7 @@ def main():
         required=True, default='logfile_download_genomes.txt',
         help="File to write the log to")
     parser.add_argument('--verbose', action='store_true', help='Detailed print')
+    parser.add_argument("--barcode_tag", default="CB", help="Barcode tag to use for extracting barcodes")
 
 
     args=parser.parse_args()

@@ -60,7 +60,8 @@ except FileNotFoundError:
 # include: "../rules/common.smk",
 include: "../rules/host.smk"
 # include: "../rules/ERCC.smk"
-include: "../rules/classfier.smk"
+# include: "../rules/classfier.smk"
+include: "../rules/classfier_update.smk"
 
 
 
