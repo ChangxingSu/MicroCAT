@@ -88,8 +88,8 @@ def mg2sc(bamfile, mgfile, dbfile, outdir,child_parent,taxid_rank):
     # Extract taxonomy IDs for each transcript
     mg_dict = extract_ids(bamfile, mgfile, child_parent, taxid_rank)
 
-    # Find most frequent taxonomy for each transcript
-    map_nested_dicts(mg_dict, most_frequent)
+    # # Find most frequent taxonomy for each transcript
+    # map_nested_dicts(mg_dict, most_frequent)
 
     # Make sparse matrix
     rows, cols, vals, cell_list, taxid_list = dict2lists(twist_dict(mg_dict))
@@ -219,8 +219,7 @@ def extract_ids(bamfile, krakenfile,child_parent, taxid_rank):
 
         # Get cell barcode and UMI from bam file
         try:
-            sread_CB = sread.get_tag('CB')
-            sread_UB = sread.get_tag('UB')
+            sread_CB = sread.get_tag('RG')
         except:
             # some reads don't have a cellbarcode or transcript barcode. They can be skipped.
             skipped += 1
@@ -242,18 +241,13 @@ def extract_ids(bamfile, krakenfile,child_parent, taxid_rank):
                 # sys.exit()
                 continue
 
-        # Make nested dictionary with cells and transcripts
+        # Make nested dictionary with RG and taxonomy IDs
         if sread_CB in nested_dict:
-            # If cell and transcript exist, add taxonomy ID to list
-            if sread_UB in nested_dict[sread_CB]:
-                nested_dict[sread_CB][sread_UB].append(kread_taxid)
-            # Otherwise create transcript dictionary for cell
-            else:
-                nested_dict[sread_CB][sread_UB] = [kread_taxid]
+            # If RG exists, add taxonomy ID to list 
+            nested_dict[sread_CB].append(kread_taxid)
         else:
-            # if cell doesn't exist, create cell and transcript dictionary with kraken id
-            nested_dict[sread_CB] = {sread_UB: [kread_taxid]}
-    
+            # If RG doesn't exist, create list with taxonomy ID
+            nested_dict[sread_CB] = [kread_taxid]
         # Output control values
     logging.info("total reads: {}, skipped reads: {}".format(line,skipped))
     
@@ -278,48 +272,43 @@ def map_nested_dicts(ob, func):
             map_nested_dicts(v, func)
         else:
             ob[k] = func(v)
-
-def twist_dict(nested):
-    """ Make count dictionary with {cellbarcode : {taxonomyID : transcriptcount}} """
+def twist_dict(nested_dict):
+    """Make count dictionary with {cellbarcode: {taxonomyID: count}}"""
+    
     newdict = {}
-    for ckey, tdict in nested.items():
-        for tkey, kvalue in tdict.items():
+    
+    for ckey, tdict in nested_dict.items():
+        for tkey in tdict:  # Assuming tdict is a list of taxonomy IDs
             if ckey in newdict:
-                if kvalue in newdict[ckey]:
-                    newdict[ckey][kvalue] += 1
+                if tkey in newdict[ckey]:
+                    newdict[ckey][tkey] += 1
                 else:
-                    newdict[ckey][kvalue] = 1
+                    newdict[ckey][tkey] = 1
             else:
-                newdict[ckey] = {kvalue: 1}
-    return(newdict)
+                newdict[ckey] = {tkey: 1}
+    
+    return newdict
+
 
 def dict2lists(nested):
     """ Returns lists for sparse matrix """
-    rows = [] # cell coordinate
-    columns = [] # taxonomy id coordinate
-    values = [] # count
+    rows = []  # cell coordinate
+    columns = []  # taxonomy id coordinate
+    values = []  # count
 
-    cell_list = [] # same order as rows
-    taxid_list = [] # same order as columns
-
-    j = 0
+    cell_list = list(nested.keys())  # cell barcodes in the same order as rows
+    taxid_list = []  # list to store unique tax IDs
 
     for ckey, taxdict in nested.items():
         for taxkey, count in taxdict.items():
-            try:
-                k = taxid_list.index(taxkey)
-            except:
+            if taxkey not in taxid_list:
                 taxid_list.append(taxkey)
-                k = taxid_list.index(taxkey)
-                
-            rows.append(k)
-            columns.append(j)
-            values.append(count) 
             
-        # increase cell coordinate by 1
-        cell_list.append(ckey)
-        j += 1
-    
+            k = taxid_list.index(taxkey)
+            rows.append(k)
+            columns.append(cell_list.index(ckey))
+            values.append(count)
+
     return rows, columns, values, cell_list, taxid_list
 
 def krakenID2dict(dbfile, taxid_list):
@@ -417,7 +406,6 @@ def extract_bc(file):
             continue
 
     logging.info("Reads in original bam file: {}, reads without cellbarcode or UMI: {}".format(line, skipped))
-
     return(bcdict)
 
 if __name__ == "__main__":

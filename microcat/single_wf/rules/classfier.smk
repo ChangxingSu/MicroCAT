@@ -31,15 +31,6 @@ rule paired_bam_to_fastq:
         bash {params.bam2fastq_script} {input.unmapped_bam_sorted_file} {output.unmapped_r1_fastq} {output.unmapped_r2_fastq} {output.unmapped_fastq} {threads}
         '''
 
-    run:
-        for fq1, fq2, o in zip(input.fq1, input.fq2, output.o):
-            shell(
-                "module load kraken && "
-                "kraken --db /dev/shm/{params.dbname} --fastq-input "
-                "--check-names --output {o} "
-                + config["params"]["Kraken"] + " "
-                "{fq1} {fq2}"
-                )
 
 if config["params"]["classifier"]["kraken2uniq"]["do"]:
     rule kraken2uniq_classified:
@@ -226,7 +217,16 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
                 "rmhost_extracted_classified_output/{sample}/{sample}_kraken2_extracted_classified.bam"),
             krak2_mpa_report=os.path.join(
                 config["output"]["classifier"],
-                "rmhost_kraken2_report/mpa/{sample}/{sample}_kraken2_mpa_report.txt")
+                "rmhost_kraken2_report/mpa/{sample}/{sample}_kraken2_mpa_report.txt"),
+            unmapped_fastq = os.path.join(
+                config["output"]["host"],
+                "unmapped_host/{sample}/{sample}_unmappped2human_bam.fastq"),
+            unmapped_r1_fastq = os.path.join(
+                config["output"]["host"],
+                "unmapped_host/{sample}/{sample}_unmappped2human_bam_r1.fastq"),
+            unmapped_r2_fastq = os.path.join(
+                config["output"]["host"],
+                "unmapped_host/{sample}/{sample}_unmappped2human_bam_r2.fastq"),
         output:
             krak_sample_denosing_result = os.path.join(
                 config["output"]["classifier"],
@@ -248,11 +248,13 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
             kmer_len = config["params"]["classifier"]["krak_sample_denosing"]["kmer_len"],
             min_entropy = config["params"]["classifier"]["krak_sample_denosing"]["min_entropy"],
             min_dust = config["params"]["classifier"]["krak_sample_denosing"]["min_dust"],
-            krak_sample_denosing_script= config["scripts"]["krak_sample_denosing"],
+            krak_sample_paired_denosing_script = config["scripts"]["krak_sample_paired_denosing"],
+            krak_sample_unpaired_denosing_script= config["scripts"]["krak_sample_unpaired_denosing"],
             inspect_file = os.path.join(config["params"]["classifier"]["kraken2uniq"]["kraken2_database"],
                                         "inspect.txt"),
             nodes_dump_file = os.path.join(config["params"]["classifier"]["kraken2uniq"]["kraken2_database"],
-                                        "taxonomy/nodes.dmp")
+                                        "taxonomy/nodes.dmp"),
+            barcode_tag = ("CB") if PLATFORM == "lane" else "RG"
         conda:
             config["envs"]["kmer_python"]
         benchmark:
@@ -260,20 +262,39 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
                         "rmhost_classified_qc/{sample}_sample_denosing_benchmark.tsv")
         shell:
             '''
-            python {params.krak_sample_denosing_script} \
-            --krak_report {input.krak2_report} \
-            --krak_output {input.krak2_extracted_output} \
-            --krak_mpa_report {input.krak2_mpa_report} \
-            --bam {input.krak2_extracted_bam} \
-            --nodes_dump {params.nodes_dump_file}\
-            --inspect {params.inspect_file} \
-            --min_frac {params.min_frac} \
-            --num_processes {threads} \
-            --min_entropy {params.min_entropy} \
-            --min_dust {params.min_dust}\
-            --qc_output_file {output.krak_sample_denosing_result} \
-            --raw_qc_output_file {output.krak_sample_raw_result} \
-            --log_file {log};
+            if [ -s "{input.unmapped_fastq}" ]; then
+                python {params.krak_sample_unpaired_denosing_script} \
+                --krak_report {input.krak2_report} \
+                --krak_output {input.krak2_extracted_output} \
+                --krak_mpa_report {input.krak2_mpa_report} \
+                --bam {input.krak2_extracted_bam} \
+                --nodes_dump {params.nodes_dump_file}\
+                --inspect {params.inspect_file} \
+                --min_frac {params.min_frac} \
+                --num_processes {threads} \
+                --min_entropy {params.min_entropy} \
+                --min_dust {params.min_dust}\
+                --qc_output_file {output.krak_sample_denosing_result} \
+                --raw_qc_output_file {output.krak_sample_raw_result} \
+                --barcode_tag {params.barcode_tag} \
+                --log_file {log};
+            else
+                python {params.krak_sample_paired_denosing_script} \
+                --krak_report {input.krak2_report} \
+                --krak_output {input.krak2_extracted_output} \
+                --krak_mpa_report {input.krak2_mpa_report} \
+                --bam {input.krak2_extracted_bam} \
+                --nodes_dump {params.nodes_dump_file}\
+                --inspect {params.inspect_file} \
+                --min_frac {params.min_frac} \
+                --num_processes {threads} \
+                --min_entropy {params.min_entropy} \
+                --min_dust {params.min_dust}\
+                --qc_output_file {output.krak_sample_denosing_result} \
+                --raw_qc_output_file {output.krak_sample_raw_result} \
+                --barcode_tag {params.barcode_tag} \
+                --log_file {log};
+            fi
             '''
     rule krak_study_denosing:
         input:
@@ -360,10 +381,12 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
             matrix_outdir = os.path.join(config["output"]["classifier"],
                 "microbiome_matrix_build/{sample}/"),
             kraken2sc_script = config["scripts"]["kraken2sc"],
+            kraken2sc_rg_script = config["scripts"]["kraken2sc_rg"],
             inspect_file = os.path.join(config["params"]["classifier"]["kraken2uniq"]["kraken2_database"],
                                         "inspect.txt"),
             nodes_dump_file = os.path.join(config["params"]["classifier"]["kraken2uniq"]["kraken2_database"],
-                                        "taxonomy/nodes.dmp")
+                                        "taxonomy/nodes.dmp"),
+            barcode_tag = ("CB") if PLATFORM == "lane" else "RG"
         priority: 
             18
         resources:
@@ -377,14 +400,32 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
             config["envs"]["kmer_python"]
         shell:
             '''
-            python {params.kraken2sc_script} \
-            --bam {input.unmapped_bam_sorted_file} \
-            --kraken_output {input.krak2_output_denosing}  \
-            --log_file {log} \
-            --nodes_dump {params.nodes_dump_file}\
-            --inspect {params.inspect_file} \
-            --processors {threads} \
-            --outdir {params.matrix_outdir}
+            # Detect barcode
+            if [ "{params.barcode_tag}" == "CB" ]; then
+
+                # Run
+                python {params.kraken2sc_script} \
+                --bam {input.unmapped_bam_sorted_file} \
+                --kraken_output {input.krak2_output_denosing}  \
+                --log_file {log} \
+                --nodes_dump {params.nodes_dump_file}\
+                --inspect {params.inspect_file} \
+                --processors {threads} \
+                --outdir {params.matrix_outdir}
+
+            else
+
+                # Run for rg
+                python {params.kraken2sc_rg_script} \
+                --bam {input.unmapped_bam_sorted_file} \
+                --kraken_output {input.krak2_output_denosing}  \
+                --log_file {log} \
+                --nodes_dump {params.nodes_dump_file}\
+                --inspect {params.inspect_file} \
+                --processors {threads} \
+                --outdir {params.matrix_outdir}
+
+            fi
             '''
 
     rule kraken2uniq_classified_all:

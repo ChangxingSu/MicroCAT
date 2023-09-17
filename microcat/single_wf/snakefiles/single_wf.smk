@@ -46,24 +46,41 @@ else:
     raise ValueError("Platform must be either 'lane' or 'plate'")
 
 
-try:
-    SAMPLES = microcat.parse_samples(config["params"]["samples"],platform = PLATFORM)
-    SAMPLES_ID_LIST = SAMPLES.index.get_level_values("sample_id").unique()
-except FileNotFoundError:
-    warning(f"ERROR: the samples file does not exist. Please see the README file for details. Quitting now.")
-    sys.exit(1)
+
 
 
 # sample_names = [sample_dict["sample"] for sample_dict in _samples]
 
 # include rules
 # include: "../rules/common.smk",
-include: "../rules/host.smk"
-# include: "../rules/ERCC.smk"
+# include: "../rules/host.smk"
+# # include: "../rules/ERCC.smk"
 # include: "../rules/classfier.smk"
-include: "../rules/classfier_update.smk"
+# # include: "../rules/classfier_update.smk"
 
 
+if config["params"]["begin"] == "host":
+    try:
+        SAMPLES = microcat.parse_samples(config["params"]["samples"],platform = PLATFORM)
+        SAMPLES_ID_LIST = SAMPLES.index.get_level_values("sample_id").unique()
+    except FileNotFoundError:
+        warning(f"ERROR: the samples file does not exist. Please see the README file for details. Quitting now.")
+        sys.exit(1)
+    include: "../rules/host.smk"
+    # include: "../rules/ERCC.smk"
+    include: "../rules/classfier.smk"
+
+elif config["params"]["begin"] == "classifier":
+    try:
+        SAMPLES = microcat.parse_bam_samples(config["params"]["samples"],platform = PLATFORM)
+        SAMPLES_ID_LIST = SAMPLES.index.get_level_values("sample_id").unique()
+    except FileNotFoundError:
+        warning(f"ERROR: the samples file does not exist. Please see the README file for details. Quitting now.")
+        sys.exit(1)
+    
+    include: "../rules/bam_host.smk"
+    # include: "../rules/ERCC.smk"
+    include: "../rules/classfier.smk"
 
 rule all:
     input:

@@ -247,7 +247,7 @@ def main():
         required=True, default='logfile_download_genomes.txt',
         help="File to write the log to")
     parser.add_argument('--verbose', action='store_true', help='Detailed print')
-
+    parser.add_argument("--barcode_tag", default="CB", help="Barcode tag to use for extracting barcodes")
 
     args=parser.parse_args()
     
@@ -317,25 +317,44 @@ def main():
 
     # Remove the ')' and leading/trailing whitespace from the 'taxid' and 'name' columns
     krak2_output['taxid'] = krak2_output['taxid'].str.replace(r'\)', '').str.strip()
+    krak2_output['r1_len'], krak2_output['r2_len'] = zip(*krak2_output['len'].apply(lambda x: x.split('|')))
+    krak2_output['r1_kmer_position'], krak2_output['r2_kmer_position']  = zip(*krak2_output['kmer_position'].apply(lambda x: x.split('|:|')))
+    r1_df = krak2_output[['query_name', 'taxa', 'taxid', 'r1_len', 'r1_kmer_position']] 
+    r2_df = krak2_output[['query_name', 'taxa', 'taxid', 'r2_len', 'r2_kmer_position']]
+    # since pair end read maybe less than k-mer,so kraken could not classified it, filter less than kmer
+    r1_df = r1_df[r1_df['r1_len'] >= str(args.kmer_len)]
+    r2_df = r2_df[r2_df['r2_len'] >= str(args.kmer_len)]
+
+    # Remove krak2_output
+    del krak2_output 
     logger.info('Finishing reading kraken2 classifier output information', status='complete')
     logger.info('Pre-calculate and store taxid, kmer_count, and taxid index information', status='run')
+    
     # Pre-calculate and store taxid, kmer_count, and taxid index information in a dictionary
-    kmer_map_dict = {}
-    for i, row in krak2_output.iterrows():
-        kmer_position = row['kmer_position'].strip()
+    kmer_map_dict_r1 = {}
+    for i, row in r1_df.iterrows():
+        kmer_position = row['r1_kmer_position'].strip()
         kmer_info = kmer_position.split(" ")
-        kmer_map_dict[i] = {
+        kmer_map_dict_r1[i] = {
             'taxids': np.array([info.split(":")[0] for info in kmer_info]),
             'kmer_counts': np.array([int(info.split(":")[1]) for info in kmer_info]),
             "main_taxid": row['taxid'],
             'query_name': row['query_name'],
         }
-
+    # Pre-calculate and store taxid, kmer_count, and taxid index information in a dictionary
+    kmer_map_dict_r2 = {}
+    for i, row in r2_df.iterrows():
+        kmer_position = row['r2_kmer_position'].strip()
+        kmer_info = kmer_position.split(" ")
+        kmer_map_dict_r2[i] = {
+            'taxids': np.array([info.split(":")[0] for info in kmer_info]),
+            'kmer_counts': np.array([int(info.split(":")[1]) for info in kmer_info]),
+            "main_taxid": row['taxid'],
+            'query_name': row['query_name'],
+        }
     logger.info(f'Parsing taxid, kmer_count, and taxid index information with {args.num_processes} processes', status='run')
-    # Remove krak2_output
-    del krak2_output 
 
-    kmer_df =[]
+
     # desired_krak_report['ncbi_taxa'] = desired_krak_report['ncbi_taxa'].astype(str)
     desired_krak_report['species_level_taxid'] = desired_krak_report['species_level_taxid'].astype(str)
     desired_taxid_list = set(desired_krak_report['ncbi_taxa'].unique())
@@ -347,34 +366,54 @@ def main():
     # Use multiprocessing to parallelize the execution for each taxa_name
     with Pool(processes=num_processes) as pool:
         # Pass additional arguments to process_taxa_kmer_dict
-        kmer_df_batches = pool.starmap(process_taxa_kmer_dict, [(taxa_name, child_parent, taxid_rank, kmer_map_dict, args.kmer_len, min_frac) for taxa_name in desired_taxid_list])
-
+        kmer_df_batches_r1 = pool.starmap(process_taxa_kmer_dict, [(taxa_name, child_parent, taxid_rank, kmer_map_dict_r1, args.kmer_len, min_frac) for taxa_name in desired_taxid_list])
     # Flatten the list of batches
-    kmer_df = [item for sublist in kmer_df_batches for item in sublist]
+    kmer_df_r1 = [item for sublist in kmer_df_batches_r1 for item in sublist]
 
-    kraken_df = pd.DataFrame(kmer_df, columns=[
+    kraken_df_r1 = pd.DataFrame(kmer_df_r1, columns=[
         "query_name", "taxid", "start_pos", "end_pos", "kmer_count", "species_level_taxid", "sequence_taxid"
     ])
 
-    kraken_df = kraken_df.drop_duplicates(subset=['query_name', 'start_pos', 'end_pos'], keep='first')
+    kraken_df_r1 = kraken_df_r1.drop_duplicates(subset=['query_name', 'start_pos', 'end_pos'], keep='first')
+
+    # 将Kraken的DataFrame的query_name列转换为一个集合
+    kraken_r1_query_names = set(kraken_df_r1["query_name"])
+    # Use multiprocessing to parallelize the execution for each taxa_name
+    with Pool(processes=num_processes) as pool:
+        # Pass additional arguments to process_taxa_kmer_dict
+        kmer_df_batches_r2 = pool.starmap(process_taxa_kmer_dict, [(taxa_name, child_parent, taxid_rank, kmer_map_dict_r2, args.kmer_len, min_frac) for taxa_name in desired_taxid_list])
+
+    # Flatten the list of batches
+    kmer_df_r2 = [item for sublist in kmer_df_batches_r2 for item in sublist]
+
+    kraken_df_r2 = pd.DataFrame(kmer_df_r2, columns=[
+        "query_name", "taxid", "start_pos", "end_pos", "kmer_count", "species_level_taxid", "sequence_taxid"
+    ])
+
+    kraken_df_r2 = kraken_df_r2.drop_duplicates(subset=['query_name', 'start_pos', 'end_pos'], keep='first')
+    
+    # 将Kraken的DataFrame的query_name列转换为一个集合
+    kraken_r2_query_names = set(kraken_df_r2["query_name"])
+
     logger.info(f'Finished parsing taxid, kmer_count, and taxid index information', status='complete')
 
+    combined_query_names = kraken_r1_query_names | kraken_r2_query_names
     # Get species level taxid
     # kraken_df['species_level_taxid'] = kraken_df.apply(lambda x: taxid_to_desired_rank(str(x['taxid']), 'species', child_parent, taxid_rank), axis=1)
     # kraken_df['species_level_taxid'] = kraken_df.apply(lambda x: taxid_to_desired_rank(str(x['taxid']), 'species', child_parent, taxid_rank)['species_taxid'], axis=1)
-    num_unique_species = len(kraken_df['species_level_taxid'].unique())
+    num_unique_species = len(kraken_df_r1['species_level_taxid'].unique())
 
     logger.info(f'Found {num_unique_species} unique species level taxids', status='summary')
 
     logger.info(f'Get the raw classified reads from bam file', status='run')
 
-    # 将Kraken的DataFrame的query_name列转换为一个集合
-    kraken_query_names = set(kraken_df["query_name"])
-
     # 将DataFrame转换为字典
-    kraken_dict = kraken_df.groupby('query_name').apply(lambda x: x.to_dict('records')).to_dict()
+    kraken_dict_r1 = kraken_df_r1.groupby('query_name').apply(lambda x: x.to_dict('records')).to_dict()
+    # 将DataFrame转换为字典
+    kraken_dict_r2 = kraken_df_r2.groupby('query_name').apply(lambda x: x.to_dict('records')).to_dict()
     # Since we have kraken_dict , we can del kraken_df to release memory
-    del kraken_df
+    del kraken_df_r1
+    del kraken_df_r2
 
     skipped = 0
     # Move constant values outside the loop
@@ -386,25 +425,25 @@ def main():
     read_count = 0
     use_count = 0
     krak_count = 0
-    # Create a defaultdict to map species_level_taxid to its set of all kmers
-    taxid_to_kmers = defaultdict(set)
+    # # Create a defaultdict to map species_level_taxid to its set of all kmers
+    # taxid_to_kmers = defaultdict(set)
     # Create a dictionary to map CB and taxid to its set of all UB and kmers
-    cb_taxid_to_ub_kmers = defaultdict(lambda: {"UB": [], "kmers": []})  # Using a nested defaultdict
+    cb_taxid_to_ub_kmers = defaultdict(lambda: {"kmers": []})  # Using a nested defaultdict
     cb_metrics_dict = defaultdict(list)
     logger.info(f'Parsing the raw classified reads from bam file', status='run')
     # 遍历bam文件的每一个read
     for sread in pysam.AlignmentFile(args.bam_file, "rb"):
         read_count += 1
         # 检查read的query_name是否在Kraken的DataFrame中
-        if sread.query_name not in kraken_query_names:
+        if sread.query_name not in combined_query_names:
             skipped += 1
             continue
 
         krak_count += 1
         # 获取CB和UB
         try:
-            sread_CB = sread.get_tag('CB')
-            sread_UB = sread.get_tag('UB')
+            sread_CB = sread.get_tag(args.barcode_tag)
+            # sread_UB = sread.get_tag('UB')
             use_count += 1
         except:
             # some reads don't have a cellbarcode or transcript barcode. They can be skipped.
@@ -414,9 +453,20 @@ def main():
         if sread_CB == '-':
             skipped += 1 
             continue
+        
         # 获取对应的Kraken信息
-        kraken_info = kraken_dict.get(sread.query_name, [])
-
+        if sread.is_read1:
+            try:
+                kraken_info = kraken_dict_r1.get(sread.query_name, [])
+            except:
+                continue
+        # 获取对应的Kraken信息
+        if sread.is_read2:
+            try:
+                kraken_info = kraken_dict_r2.get(sread.query_name, [])
+            except:
+                continue
+        
         # 遍历每一个Kraken信息
         for row in kraken_info:
             # 获取序列的子串
@@ -446,19 +496,18 @@ def main():
                 sread_CB, row[species_level_taxid_key], seq_kmer_consistency,
                 seq_entropy, seq_dust_score, seq_length
             ])
-            # Add kmers to the set of the corresponding species_level_taxid
-            taxid_to_kmers[row[species_level_taxid_key]].update(kmers)
             
             key = (sread_CB, row[species_level_taxid_key])
-            cb_taxid_to_ub_kmers[key]["UB"].append(sread_UB)
+            # cb_taxid_to_ub_kmers[key]["UB"].append(sread_UB)
             cb_taxid_to_ub_kmers[key]["kmers"].extend(kmers)
 
     logger.info(f'Finished parsing the raw classified reads from bam file', status='run')
     logger.info(f'Total unmapped reads: {read_count}', status='summary')
     logger.info(f'Total unmapped reads classified by Kraken: {krak_count}', status='summary')
-    logger.info(f'Total classified Reads with CB and UB: {use_count}', status='summary')
+    logger.info(f'Total classified Reads with CB : {use_count}', status='summary')
     logger.info(f'Skipped reads: {skipped}', status='summary')
-
+    logger.info(f'Finishing getting the raw classified reads from bam file', status='complete')
+    logger.info(f'Calculating quality control indicators', status='run')
     # 将 cb_metrics_dict 转换为 DataFrame
     cb_metrics_list = []
     for cb_data_list in cb_metrics_dict.values():
@@ -487,51 +536,55 @@ def main():
     ]
 
     # Create a list of dictionaries for
-    data = [{"CB": cb, "species_level_taxid": species_level_taxid, "UB": ub_kmers["UB"], "kmers": ub_kmers["kmers"]} 
-            for (cb, species_level_taxid), ub_kmers in cb_taxid_to_ub_kmers.items()]
+    data = [{"CB": cb, "species_level_taxid": species_level_taxid, "kmers": kmers["kmers"]} 
+            for (cb, species_level_taxid), kmers in cb_taxid_to_ub_kmers.items()]
 
     # Create the DataFrame from the list of dictionaries
     cb_taxid_ub_kmer_count_df = pd.DataFrame(data)
     # Del data
     del data
     del cb_taxid_to_ub_kmers
-    # Convert the DataFrame to long format, each row contains a kmer
-    cb_taxid_ub_kmer_count_df = cb_taxid_ub_kmer_count_df.explode('kmers').explode('UB')
 
-    # Calculate total kmer counts for each CB and species_level_taxid combination
-    total_kmer_counts = cb_taxid_ub_kmer_count_df.groupby(['CB', 'species_level_taxid']).size().reset_index(name='kmer_counts')
+    num_unique_CB = len(cb_taxid_ub_kmer_count_df['CB'].unique())
+    if num_unique_CB > 1:
+        # Convert the DataFrame to long format, each row contains a kmer
+        cb_taxid_ub_kmer_count_df = cb_taxid_ub_kmer_count_df.explode('kmers')
 
-    # Calculate number of unique kmers for each CB and species_level_taxid combination 
-    unique_kmer_counts = cb_taxid_ub_kmer_count_df.groupby(['CB', 'species_level_taxid']).agg({'kmers': pd.Series.nunique}).reset_index().rename(columns={'kmers': 'unique_kmer_counts'})
+        # Calculate total kmer counts for each CB and species_level_taxid combination
+        total_kmer_counts = cb_taxid_ub_kmer_count_df.groupby(['CB', 'species_level_taxid']).size().reset_index(name='kmer_counts')
+
+        # Calculate number of unique kmers for each CB and species_level_taxid combination 
+        unique_kmer_counts = cb_taxid_ub_kmer_count_df.groupby(['CB', 'species_level_taxid']).agg({'kmers': pd.Series.nunique}).reset_index().rename(columns={'kmers': 'unique_kmer_counts'})
 
 
-    # 标识重复的 kmers，并获取不重复的行
-    cb_taxid_ub_global_unique_count_df = cb_taxid_ub_kmer_count_df[~cb_taxid_ub_kmer_count_df.duplicated(subset=['kmers'], keep=False)]
+        # 标识重复的 kmers，并获取不重复的行
+        cb_taxid_ub_global_unique_count_df = cb_taxid_ub_kmer_count_df[~cb_taxid_ub_kmer_count_df.duplicated(subset=['kmers'], keep=False)]
 
-    global_unique_kmer_counts =cb_taxid_ub_global_unique_count_df.groupby(['CB', 'species_level_taxid']).agg({'kmers': pd.Series.nunique}).reset_index().rename(columns={'kmers': 'global_unique_kmer_counts'})
+        global_unique_kmer_counts =cb_taxid_ub_global_unique_count_df.groupby(['CB', 'species_level_taxid']).agg({'kmers': pd.Series.nunique}).reset_index().rename(columns={'kmers': 'global_unique_kmer_counts'})
 
-    cb_taxid_kmer_count_df = pd.merge(total_kmer_counts, unique_kmer_counts, on=['CB', 'species_level_taxid'])
-    cb_taxid_kmer_count_df = pd.merge(cb_taxid_kmer_count_df,global_unique_kmer_counts, on=['CB', 'species_level_taxid'])
-    del cb_taxid_ub_global_unique_count_df
-    del cb_taxid_ub_kmer_count_df
-    cb_taxid_kmer_corr_df = cb_taxid_kmer_count_df.groupby('species_level_taxid').apply(calc_correlation).reset_index()
-    logger.info(f'Finishing getting the raw classified reads from bam file', status='complete')
-    logger.info(f'Calculating quality control indicators', status='run')
+        cb_taxid_kmer_count_df = pd.merge(total_kmer_counts, unique_kmer_counts, on=['CB', 'species_level_taxid'])
+        cb_taxid_kmer_count_df = pd.merge(cb_taxid_kmer_count_df,global_unique_kmer_counts, on=['CB', 'species_level_taxid'])
+        del cb_taxid_ub_global_unique_count_df
+        del cb_taxid_ub_kmer_count_df
+        cb_taxid_kmer_corr_df = cb_taxid_kmer_count_df.groupby('species_level_taxid').apply(calc_correlation).reset_index()
 
-    p_val_cols = ['p_value_kmer_global_uniq_counts', 'p_value_kmer_uniq_counts']
+        p_val_cols = ['p_value_kmer_global_uniq_counts', 'p_value_kmer_uniq_counts']
 
-    non_na_rows = cb_taxid_kmer_corr_df[p_val_cols].notna().any(axis=1)
+        non_na_rows = cb_taxid_kmer_corr_df[p_val_cols].notna().any(axis=1)
 
-    # Calculate ntests using non-na rows
-    ntests = non_na_rows.sum()
-    # Perform multiple testing correction only if ntests is non-zero
-    if ntests > 5:
-        # Filter out NaN p-values and adjust them for both sets
-        for col in p_val_cols:
-            if col in cb_taxid_kmer_corr_df.columns:
-                non_nan = cb_taxid_kmer_corr_df[col].notna()
-                cb_taxid_kmer_corr_df.loc[non_nan, col] = multipletests(cb_taxid_kmer_corr_df.loc[non_nan, col], method='fdr_bh')[1]
+        # Calculate ntests using non-na rows
+        ntests = non_na_rows.sum()
+        # Perform multiple testing correction only if ntests is non-zero
+        if ntests > 5:
+            # Filter out NaN p-values and adjust them for both sets
+            for col in p_val_cols:
+                if col in cb_taxid_kmer_corr_df.columns:
+                    non_nan = cb_taxid_kmer_corr_df[col].notna()
+                    cb_taxid_kmer_corr_df.loc[non_nan, col] = multipletests(cb_taxid_kmer_corr_df.loc[non_nan, col], method='fdr_bh')[1]
+        else:
+            pass
     else:
+        ntests = 0
         pass
 
     final_desired_krak_report = desired_krak_report.copy()
@@ -546,10 +599,12 @@ def main():
     final_desired_krak_report["rpmm"] =final_desired_krak_report['fragments']/ microbiome_reads * 1e6
     final_desired_krak_report = final_desired_krak_report.merge(species_seq_metrics,left_on='species_level_taxid', right_on='species_level_taxid')
     # final_desired_krak_report.drop('taxid', axis=1, inplace=True)
-
-    final_desired_krak_report = final_desired_krak_report.merge(cb_taxid_kmer_corr_df,left_on='species_level_taxid', right_on='species_level_taxid')
+    if num_unique_CB > 1:
+        final_desired_krak_report = final_desired_krak_report.merge(cb_taxid_kmer_corr_df,left_on='species_level_taxid', right_on='species_level_taxid')
     # final_desired_krak_report.drop('species_level_taxid', axis=1, inplace=True)
-
+    else:
+        pass
+    
     final_desired_krak_report['superkingdom'] = final_desired_krak_report.apply(lambda x: taxid_to_desired_rank(str(x['ncbi_taxa']),'superkingdom', child_parent, taxid_rank), axis=1)
     final_desired_krak_report['bacteria_mean_cov_cutoff'] = bacteria_mean_cov/50
     final_desired_krak_report['archaea_mean_cov_cutoff'] = archaea_mean_cov/50
@@ -567,7 +622,7 @@ def main():
     logger.info(f'Filtering taxa with quality control indicators', status='run')
     final_desired_krak_report['superkingdom'] = final_desired_krak_report['superkingdom'].astype(str)
     ## For many corr
-    if ntests > 5:
+    if ntests > 5 and num_unique_CB > 1:
         filter_desired_krak_report = final_desired_krak_report.copy()[
             (final_desired_krak_report['average_seq_entropy'] > args.min_entropy) &
             (final_desired_krak_report['max_minimizers'] > 5) &

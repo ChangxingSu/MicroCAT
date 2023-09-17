@@ -496,11 +496,12 @@
     "description": "Dropseq",
     "soloType": "CB_UMI_Simple",
     "soloStrand": "Forward",
+    "outSAMtype": "BAM SortedByCoordinate",
     "outSAMattributes": "NH HI AS nM CB UB CR CY UR UY GX GN",
     "name": "Dropseq",
     "algorithm": [
       {
-        "soloUMIdedup": "1MM All",
+        "soloUMIdedup": "1MM_All",
         "soloCBmatchWLtype": "1MM",
         "soloUMIfiltering": "-",
         "soloCellFilter": "CellRanger2.2 3000 0.99 10",

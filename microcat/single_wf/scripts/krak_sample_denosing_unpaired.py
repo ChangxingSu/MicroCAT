@@ -387,10 +387,10 @@ def main():
     read_count = 0
     use_count = 0
     krak_count = 0
-    # Create a defaultdict to map species_level_taxid to its set of all kmers
-    taxid_to_kmers = defaultdict(set)
+    # # Create a defaultdict to map species_level_taxid to its set of all kmers
+    # taxid_to_kmers = defaultdict(set)
     # Create a dictionary to map CB and taxid to its set of all UB and kmers
-    cb_taxid_to_ub_kmers = defaultdict(lambda: {"UB": [], "kmers": []})  # Using a nested defaultdict
+    cb_taxid_to_ub_kmers = defaultdict(lambda: {"kmers": []})  # Using a nested defaultdict
     cb_metrics_dict = defaultdict(list)
     logger.info(f'Parsing the raw classified reads from bam file', status='run')
     # 遍历bam文件的每一个read
@@ -404,8 +404,8 @@ def main():
         krak_count += 1
         # 获取CB和UB
         try:
-            sread_CB = sread.get_tag('CB')
-            sread_UB = sread.get_tag('UB')
+            sread_CB = sread.get_tag(args.barcode_tag)
+            # sread_UB = sread.get_tag('UB')
             use_count += 1
         except:
             # some reads don't have a cellbarcode or transcript barcode. They can be skipped.
@@ -447,11 +447,9 @@ def main():
                 sread_CB, row[species_level_taxid_key], seq_kmer_consistency,
                 seq_entropy, seq_dust_score, seq_length
             ])
-            # Add kmers to the set of the corresponding species_level_taxid
-            taxid_to_kmers[row[species_level_taxid_key]].update(kmers)
             
             key = (sread_CB, row[species_level_taxid_key])
-            cb_taxid_to_ub_kmers[key]["UB"].append(sread_UB)
+            # cb_taxid_to_ub_kmers[key]["UB"].append(sread_UB)
             cb_taxid_to_ub_kmers[key]["kmers"].extend(kmers)
 
     logger.info(f'Finished parsing the raw classified reads from bam file', status='run')
@@ -488,8 +486,10 @@ def main():
     ]
 
     # Create a list of dictionaries for
-    data = [{"CB": cb, "species_level_taxid": species_level_taxid, "UB": ub_kmers["UB"], "kmers": ub_kmers["kmers"]} 
-            for (cb, species_level_taxid), ub_kmers in cb_taxid_to_ub_kmers.items()]
+    # data = [{"CB": cb, "species_level_taxid": species_level_taxid, "UB": ub_kmers["UB"], "kmers": ub_kmers["kmers"]} 
+    #         for (cb, species_level_taxid), ub_kmers in cb_taxid_to_ub_kmers.items()]
+    data = [{"CB": cb, "species_level_taxid": species_level_taxid, "kmers": kmers["kmers"]} 
+            for (cb, species_level_taxid), kmers in cb_taxid_to_ub_kmers.items()]
 
     # Create the DataFrame from the list of dictionaries
     cb_taxid_ub_kmer_count_df = pd.DataFrame(data)
@@ -497,7 +497,7 @@ def main():
     del data
     del cb_taxid_to_ub_kmers
     # Convert the DataFrame to long format, each row contains a kmer
-    cb_taxid_ub_kmer_count_df = cb_taxid_ub_kmer_count_df.explode('kmers').explode('UB')
+    cb_taxid_ub_kmer_count_df = cb_taxid_ub_kmer_count_df.explode('kmers')
 
     # Calculate total kmer counts for each CB and species_level_taxid combination
     total_kmer_counts = cb_taxid_ub_kmer_count_df.groupby(['CB', 'species_level_taxid']).size().reset_index(name='kmer_counts')

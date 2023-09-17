@@ -10,7 +10,7 @@ workflow                       : single
 #######################################################################################
 # Params settings
 params:
-  begin                        : trimming # First step of workflow 
+  begin                        : host # First step of workflow 
   samples                      : sample.tsv # Sample info table
   ## Host Alignment parameters
   host:
@@ -165,9 +165,11 @@ scripts:
   kraken2sc                    : scripts/kraken2sc.py # Convert kraken2 output to silvacompatible format
   extract_kraken_reads         : scripts/extract_kraken_reads.py # Extract classified reads from kraken2 output
   krak2_output_denosing        : scripts/krak2_output_denosing.py # Denoise kraken2 output
-  krak_sample_denosing         : scripts/krak_sample_denosing.py # Sample-level denoising 
+  krak_sample_unpaired_denosing: scripts/krak_sample_denosing_unpaired.py # Sample-level denoising 
+  krak_sample_paired_denosing  : scripts/krak_sample_denosing.py # Sample-level denoising 
   krak_study_denosing          : scripts/krak_study_denosing.py # Study-level denoising
   spilt_bam_by_tag             : scripts/spilt_bam_by_tag.py # Split BAM by cell barcode
   INVADEseq                    : scripts/INVADEseq.py # INVADE sequencing QC
   starsolo_10X_auto            : scripts/starsolo_tenX_auto.sh # Wrapper script for STARsolo 10x pipeline
   bam2fastq                    : scripts/paired_bam_to_fastq_script.sh # Wrapper script for bam convert to fastq
+  kraken2sc_rg                 : scripts/kraken2sc_rg.py # Convert kraken2 output to silvacompatible format

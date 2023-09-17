@@ -221,8 +221,8 @@ def init():
 ## Single Init
 @init.command("single")
 @click.option("-b",'--begin',
-              type=click.Choice(['simulate','trimming','host','classifier','denosing'], case_sensitive=False),
-              default='trimming', 
+              type=click.Choice(['host','classifier','denosing'], case_sensitive=False),
+              default='host', 
               show_default=True,
               help='Pipeline starting point', 
               show_choices=True)
@@ -361,9 +361,6 @@ def single_init(
         # If the user didn't provide a working directory, print an error message and exit
         click.secho("ERROR:Please supply a workdir!",fg='red')
         sys.exit(-1)
-
-
-
 
 @init.command("bulk")
 @click.option('--begin',

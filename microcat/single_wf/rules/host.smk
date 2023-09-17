@@ -121,10 +121,10 @@ if config["params"]["host"]["starsolo"]["do"]:
                         soloMultiMappers = config["params"]["host"]["starsolo"]["algorithm"]["soloMultiMappers"],
                     log:
                         os.path.join(config["logs"]["host"],
-                                    "starsolo/{sample}_starsolo_count.log")
+                                    "{sample}/{sample}_starsolo_count.log")
                     benchmark:
                         os.path.join(config["benchmarks"]["host"],
-                                    "starsolo/{sample}_starsolo_count.benchmark")
+                                    "{sample}/{sample}_starsolo_count.benchmark")
                     conda:
                         config["envs"]["star"]
                     resources:
@@ -198,7 +198,8 @@ if config["params"]["host"]["starsolo"]["do"]:
                     clipAdapterType = config["params"]["host"]["starsolo"]["algorithm"]["clipAdapterType"],
                     outFilterScoreMin = config["params"]["host"]["starsolo"]["algorithm"]["outFilterScoreMin"],
                     soloMultiMappers = config["params"]["host"]["starsolo"]["algorithm"]["soloMultiMappers"],
-                    barcode_list =  os.path.join(config["datas"]["barcode_list_dirs"]["tenX"],
+                    barcode_list = "None" if config["params"]["host"]["starsolo"]["barcode"]["soloCBwhitelist"] == "None"
+                                            else os.path.join(config["datas"]["barcode_list_dirs"]["tenX"],
                                                 config["params"]["host"]["starsolo"]["barcode"]["soloCBwhitelist"]),
                     outSAMattributes = config["params"]["host"]["starsolo"]["outSAMattributes"],
                     outSAMtype = config["params"]["host"]["starsolo"]["outSAMtype"],
@@ -209,10 +210,10 @@ if config["params"]["host"]["starsolo"]["do"]:
                     config["resources"]["starsolo"]["threads"]
                 log:
                     os.path.join(config["logs"]["host"],
-                                "starsolo/{sample}_starsolo_count.log")
+                                "{sample}/{sample}_starsolo_count.log")
                 benchmark:
                     os.path.join(config["benchmarks"]["host"],
-                                "starsolo/{sample}_starsolo_count.benchmark")
+                                "{sample}/{sample}_starsolo_count.benchmark")
                 conda:
                     config["envs"]["star"]
                 message: "Executing starsolo with {threads} threads on the following files {wildcards.sample}.Library with {params.description}"
@@ -275,10 +276,10 @@ if config["params"]["host"]["starsolo"]["do"]:
                 mem_mb=config["resources"]["samtools_extract"]["mem_mb"],
             log:
                 os.path.join(config["logs"]["host"],
-                            "starsolo/{sample}/unmapped_extracted_sorted_bam.log")
+                            "{sample}/unmapped_extracted_sorted_bam.log")
             benchmark:
                 os.path.join(config["benchmarks"]["host"],
-                            "starsolo/{sample}/unmapped_extracted_sorted_bam.benchmark")
+                            "{sample}/unmapped_extracted_sorted_bam.benchmark")
             shell:
                 '''
                 samtools view --threads  {threads}  -b -f 4  {input.mapped_bam_file}  >  {params.unmapped_bam_unsorted_file};\
@@ -357,10 +358,10 @@ if config["params"]["host"]["starsolo"]["do"]:
                 variousParams = config["params"]["host"]["starsolo"]["variousParams"],
             log:
                 os.path.join(config["logs"]["host"],
-                            "starsolo/{sample}/starsolo_count_smartseq2_PE.log")
+                            "{sample}/starsolo_count_smartseq2_PE.log")
             benchmark:
                 os.path.join(config["benchmarks"]["host"],
-                            "starsolo/{sample}/starsolo_count_smartseq2_PE.benchmark")
+                            "{sample}/starsolo_count_smartseq2_PE.benchmark")
             conda:
                 config["envs"]["star"]
             resources:
@@ -517,10 +518,10 @@ if config["params"]["host"]["starsolo"]["do"]:
                     "unmapped_host/{sample}/Aligned_out_unmapped_PE.bam"))
             log:
                 os.path.join(config["logs"]["host"],
-                            "starsolo/{sample}/unmapped_sorted_bam.log")
+                            "{sample}/unmapped_sorted_bam.log")
             benchmark:
                 os.path.join(config["benchmarks"]["host"],
-                            "starsolo/{sample}/unmapped_sorted_bam.benchmark")
+                            "{sample}/unmapped_sorted_bam.benchmark")
             threads:
                 config["resources"]["samtools_extract"]["threads"]
             conda:
@@ -737,10 +738,10 @@ if config["params"]["host"]["starsolo"]["do"]:
                     config["resources"]["starsolo"]["threads"]
                 log:
                     os.path.join(config["logs"]["host"],
-                                "starsolo/{sample}_starsolo_count.log")
+                                "{sample}/{sample}_starsolo_count.log")
                 benchmark:
                     os.path.join(config["benchmarks"]["host"],
-                                "starsolo/{sample}_starsolo_count.benchmark")
+                                "{sample}/{sample}_starsolo_count.benchmark")
                 conda:
                     config["envs"]["star"]
                 message: "Executing starsolo with {threads} threads on the following files {wildcards.sample}.Library with {params.description}"
@@ -807,10 +808,10 @@ if config["params"]["host"]["starsolo"]["do"]:
                     mem_mb=config["resources"]["samtools_extract"]["mem_mb"],
                 log:
                     os.path.join(config["logs"]["host"],
-                                "starsolo/{sample}/unmapped_extracted_sorted_bam.log")
+                                "{sample}/unmapped_extracted_sorted_bam.log")
                 benchmark:
                     os.path.join(config["benchmarks"]["host"],
-                                "starsolo/{sample}/unmapped_extracted_sorted_bam.benchmark")
+                                "{sample}/unmapped_extracted_sorted_bam.benchmark")
                 shell:
                     '''
                     samtools view --threads  {threads}  -b -f 4  {input.mapped_bam_file}  >  {params.unmapped_bam_unsorted_file};\
@@ -861,7 +862,13 @@ if config["params"]["host"]["cellranger"]["do"]:
                 "cellranger_count/{sample}/{sample}_mappped2human_bam.bam"),
             mapped_bam_index_file = os.path.join(
                 config["output"]["host"],
-                "cellranger_count/{sample}/{sample}_mappped2human_bam.bam.bai")
+                "cellranger_count/{sample}/{sample}_mappped2human_bam.bam.bai"),
+            metrics_summary = os.path.join(
+                config["output"]["host"],
+                "cellranger_count/{sample}/{sample}.metrics_summary.csv"),
+            web_summary = os.path.join(
+                config["output"]["host"],
+                "cellranger_count/{sample}/{sample}.web_summary.html"),
         priority: 10
         params:
             cr_out = os.path.join(
@@ -869,12 +876,6 @@ if config["params"]["host"]["cellranger"]["do"]:
                 "cellranger_count/"),
             reference = config["params"]["host"]["cellranger"]["reference"],
             # local_cores = config["params"]["host"]["cellranger"]["local_cores"],
-            metrics_summary = os.path.join(
-                config["output"]["host"],
-                "cellranger_count/{sample}/{sample}.metrics_summary.csv"),
-            web_summary = os.path.join(
-                config["output"]["host"],
-                "cellranger_count/{sample}/{sample}.web_summary.html"),
             SampleID="{sample}",
             variousParams = config["params"]["host"]["cellranger"]["variousParams"],
         # resources:
@@ -913,8 +914,8 @@ if config["params"]["host"]["cellranger"]["do"]:
             ln -sr "{params.cr_out}{params.SampleID}/outs/filtered_feature_bc_matrix/features.tsv" "{output.features_file}"; 
             ln -sr "{params.cr_out}{params.SampleID}/outs/filtered_feature_bc_matrix/matrix.mtx" "{output.matrix_file}"; 
             ln -sr "{params.cr_out}{params.SampleID}/outs/filtered_feature_bc_matrix/barcodes.tsv" "{output.barcodes_file}" ; 
-            ln -sr "{params.cr_out}{params.SampleID}/outs/web_summary.html" "{params.web_summary}" ; 
-            ln -sr "{params.cr_out}{params.SampleID}/outs/metrics_summary.csv" "{params.metrics_summary}";
+            ln -sr "{params.cr_out}{params.SampleID}/outs/web_summary.html" "{output.web_summary}" ; 
+            ln -sr "{params.cr_out}{params.SampleID}/outs/metrics_summary.csv" "{output.metrics_summary}";
             ln -sr "{params.cr_out}{params.SampleID}/outs/possorted_genome_bam.bam" "{output.mapped_bam_file}";
             ln -sr "{params.cr_out}{params.SampleID}/outs/possorted_genome_bam.bam.bai" "{output.mapped_bam_index_file}";
             '''
