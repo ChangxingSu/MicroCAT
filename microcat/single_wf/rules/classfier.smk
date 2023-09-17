@@ -271,7 +271,6 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
                 --nodes_dump {params.nodes_dump_file}\
                 --inspect {params.inspect_file} \
                 --min_frac {params.min_frac} \
-                --num_processes {threads} \
                 --min_entropy {params.min_entropy} \
                 --min_dust {params.min_dust}\
                 --qc_output_file {output.krak_sample_denosing_result} \
@@ -287,7 +286,6 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
                 --nodes_dump {params.nodes_dump_file}\
                 --inspect {params.inspect_file} \
                 --min_frac {params.min_frac} \
-                --num_processes {threads} \
                 --min_entropy {params.min_entropy} \
                 --min_dust {params.min_dust}\
                 --qc_output_file {output.krak_sample_denosing_result} \

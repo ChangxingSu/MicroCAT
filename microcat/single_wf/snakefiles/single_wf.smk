@@ -45,20 +45,6 @@ elif config["params"]["host"]["cellranger"]["do"]:
 else:
     raise ValueError("Platform must be either 'lane' or 'plate'")
 
-
-
-
-
-# sample_names = [sample_dict["sample"] for sample_dict in _samples]
-
-# include rules
-# include: "../rules/common.smk",
-# include: "../rules/host.smk"
-# # include: "../rules/ERCC.smk"
-# include: "../rules/classfier.smk"
-# # include: "../rules/classfier_update.smk"
-
-
 if config["params"]["begin"] == "host":
     try:
         SAMPLES = microcat.parse_samples(config["params"]["samples"],platform = PLATFORM)
