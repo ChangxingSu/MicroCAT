@@ -302,8 +302,12 @@ def main():
     r1_df = krak2_output[['query_name', 'taxa', 'taxid', 'r1_len', 'r1_kmer_position']] 
     r2_df = krak2_output[['query_name', 'taxa', 'taxid', 'r2_len', 'r2_kmer_position']]
     # since pair end read maybe less than k-mer,so kraken could not classified it, filter less than kmer
-    r1_df = r1_df[r1_df['r1_len'] >= str(args.kmer_len)]
-    r2_df = r2_df[r2_df['r2_len'] >= str(args.kmer_len)]
+    r1_df['r1_len'] = r1_df['r1_len'].astype(int)
+    r2_df['r2_len'] = r2_df['r2_len'].astype(int)
+    r1_df['taxid'] = r1_df['taxid'].astype(str)
+    r2_df['taxid'] = r2_df['taxid'].astype(str)
+    r1_df = r1_df[r1_df['r1_len'] >= args.kmer_len]
+    r2_df = r2_df[r2_df['r2_len'] >= args.kmer_len]
 
     # Remove krak2_output
     del krak2_output

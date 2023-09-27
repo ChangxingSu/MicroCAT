@@ -16,6 +16,8 @@ clipAdapterType=""
 variousParams=""
 file_command=""
 
+set -u 
+
 # 解析命令行选项
 while [[ "$#" -gt 0 ]]; do
   case $1 in
@@ -288,6 +290,12 @@ report="${sample}_test_strand/GeneFull/Summary.csv"
 
 UNIQFRQ=`grep "Reads Mapped to Genome: Unique," $report | awk -F "," '{print $2}'`
 GENEPCT=`grep "Reads Mapped to GeneFull: Unique GeneFull" $report | awk -F "," -v v=$UNIQFRQ '{printf "%d\n",$2*100/v}'`
+
+# check GENEPCT
+if [ -z "${GENEPCT+x}" ]; then
+  echo "GENEPCT is None"
+  exit 1
+fi
 
 ## this percentage is very empirical, but was found to work in 99% of cases. 
 ## any 10x 3' run with GENEPCT < 35%, and any 5' run with GENEPCT > 35% are 
