@@ -10,8 +10,6 @@ import microcat
 MICROCAT_DIR = microcat.__path__[0]
 
 wildcard_constraints:
-    # Patient = "[a-zA-Z0-9_]+", # Any alphanumeric characters and underscore
-    # tissue = "S[0-9]+",  # S followed by any number
     lane = "L[0-9]{3}",  # L followed by exactly 3 numbers
     plate = "P[0-9]{3}",  # L followed by exactly 3 numbers
     library = "[0-9]{3}"  # Exactly 3 numbers
@@ -27,7 +25,6 @@ class ansitxt:
 
 def warning(msg):
     print(f"\n{ansitxt.BOLD}{ansitxt.RED}{msg}{ansitxt.ENDC}\n",file=sys.stderr)
-
 
 PLATFORM = None
 
@@ -55,9 +52,9 @@ if config["params"]["begin"] == "host":
             sys.exit(1)
 
     include: "../rules/host.smk"
-    include: "../rules/classfier.smk"
+    include: "../rules/classifier.smk"
     include: "../rules/downstream.smk"
-
+    include: "../rules/align.smk"
 
 elif config["params"]["begin"] == "classifier":
     try:
@@ -69,11 +66,13 @@ elif config["params"]["begin"] == "classifier":
             sys.exit(1)
     
     include: "../rules/bam_host.smk"
-    # include: "../rules/ERCC.smk"
-    include: "../rules/classfier.smk"
+    include: "../rules/classifier.smk"
+    include: "../rules/downstream.smk"
+    include: "../rules/align.smk"
 
 rule all:
     input:
         rules.host_all.input,
         rules.downstream_all.input,
-        rules.classifier_all.input
+        rules.classifier_all.input,
+        rules.align_all.input,
