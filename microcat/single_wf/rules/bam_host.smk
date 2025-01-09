@@ -1,3 +1,5 @@
+import os
+import subprocess
 
 rule raw_prepare_bam:
     input:
@@ -9,7 +11,7 @@ rule raw_prepare_bam:
     output:
         mapped_bam_file = os.path.join(
             config["output"]["host"],
-            "/{sample}/Aligned_sortedByCoord_out.bam")
+            "{sample}/Aligned_sortedByCoord_out.bam")
     shell:
         '''
         ln -sr "{params.bam_reads}" "{output.mapped_bam_file}";
@@ -32,8 +34,8 @@ rule bam_unmapped_extracted_sorted:
             config["output"]["host"],
             "unmapped_host/{sample}/Aligned_sortedByCoord_unmapped_out.bam")
     ## because bam is sorted by Coord,it's necessary to sort it by read name
-    conda:
-        config["envs"]["star"]
+    # conda:
+    #     config["envs"]["star"]
     threads:
         config["resources"]["samtools_extract"]["threads"]
     resources:
@@ -44,13 +46,31 @@ rule bam_unmapped_extracted_sorted:
     benchmark:
         os.path.join(config["benchmarks"]["host"],
                     "starsolo/{sample}/unmapped_extracted_sorted_bam.benchmark")
-    shell:
-        '''
-        samtools view --threads  {threads}  -b -f 4  {input.mapped_bam_file}  >  {params.unmapped_bam_unsorted_file};\
-        samtools sort -n  --threads  {threads} {params.unmapped_bam_unsorted_file} -o {output.unmapped_bam_sorted_file};\
-        samtools index -@  {threads} {output.unmapped_bam_sorted_file} -o {output.unmapped_bam_sorted_index};\
-        rm -rf {params.unmapped_bam_unsorted_file};
-        '''
+    run:    
+        # Run the samtools view command
+        shell(
+            'samtools view --threads {threads} -b -f 4 {input.mapped_bam_file} > {params.unmapped_bam_unsorted_file}'
+        )
+
+        # Run samtools view to get the first 10 lines of the BAM file
+        result = subprocess.run(f'samtools view {params.unmapped_bam_unsorted_file} | head -n 10', shell=True, capture_output=True)
+
+        # Decode the bytes to a string
+        head_output_str = result.stdout.decode('utf-8')
+        # Count the number of lines in the head output
+        line_count = len(head_output_str.strip().split('\n'))
+
+        # Check if the line count is zero and raise an exception if true
+        if line_count == 0:
+                raise ValueError(f"Error: The unmapped BAM unsorted file for sample {wildcards.sample} is empty. Please check your data.")
+        # Continue with the remaining shell commands
+        shell(
+            '''
+            samtools sort -n --threads {threads} {params.unmapped_bam_unsorted_file} -o {output.unmapped_bam_sorted_file};\
+            samtools index -@ {threads} {output.unmapped_bam_sorted_file} -o {output.unmapped_bam_sorted_index};\
+            rm -rf {params.unmapped_bam_unsorted_file};
+            '''
+        )
 
 rule host_all:
     input:

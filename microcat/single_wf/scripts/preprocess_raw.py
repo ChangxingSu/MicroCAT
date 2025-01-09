@@ -4,7 +4,7 @@ import os
 import json
 import subprocess
 import shutil
-
+import sys
 
 try:
     samples_df = pd.read_csv(snakemake.input[0], sep="\t")
@@ -13,7 +13,7 @@ except FileNotFoundError:
     sys.exit(1)
 
 
-# 创建一个空字典以存储处理信息
+# Create an empty list to store processing information
 processing_info = []
 
 if not set(['id', 'fq1', 'fq2']).issubset(samples_df.columns):
@@ -25,10 +25,7 @@ samples_df['is_lane'] = samples_df['patient_tissue_lane_plate'].apply(lambda x: 
 samples_df.loc[samples_df['is_lane'], 'lane'] = samples_df['patient_tissue_lane_plate'].apply(lambda x: x.split('_')[-1])
 samples_df['patient_tissue'] = samples_df['patient_tissue_lane_plate'].apply(lambda x: '_'.join(x.split('_')[:-1]))
 samples_df = samples_df.drop(columns=['patient_tissue_lane_plate'])
-# samples_df = samples_df.loc[(samples_df.plate == snakemake.wildcards["plate"]) & (samples_df["patient_tissue"] == snakemake.wildcards["sample"])]
 samples_df = samples_df.loc[(samples_df["patient_tissue"] == snakemake.wildcards["sample"])]
-
-
 samples_df = samples_df.reset_index()
 
 # # Extract required columns from the parsed samples DataFrame
@@ -38,70 +35,66 @@ samples_df = samples_df.reset_index()
 # manifest_df = manifest_df[manifest_df['fq2'].notna()]
 output = str(snakemake.output[0])
 outdir = os.path.dirname(output)
-# temp file
-# execute(f'''rm -rf {outdir}''')
-# execute(f'''mkdir -p {outdir}''')
-# 如果目录存在，先删除
+
+# Remove directory if exists
 if os.path.exists(outdir):
     shutil.rmtree(outdir)
 
-# 创建目录
+# Create output directory
 os.makedirs(outdir)
-# 遍历样本数据，根据patient_tissue重新命名文件并创建软链接
+
+# Iterate through samples and create symlinks with renamed files based on patient_tissue
 for index, sample in samples_df.iterrows():
     fq1 = sample['fq1']
     fq2 = sample['fq2']
-    PATIENT_TISSUE = sample['patient_tissue']
-    LANE = sample['lane']
-    LIBRARY = sample['library']
+    patient_tissue = sample['patient_tissue']
+    lane = sample['lane']
+    library = sample['library']
 
+    # Check file extension
+    if (fq1.endswith(".fastq") and fq2.endswith(".fastq")) or (fq1.endswith(".fq") and fq2.endswith(".fq")):
+        file_type = 'fastq'
+        # Build new filenames
+        new_fq1 = os.path.join(outdir, f'{patient_tissue}_S1_{lane}_R1_{library}.fastq')
+        new_fq2 = os.path.join(outdir, f'{patient_tissue}_S1_{lane}_R2_{library}.fastq')
 
-    # 检查文件后缀是否为fastq
-    if fq1.endswith(".fastq") and fq2.endswith(".fastq"):
-        TYPE = 'fastq'
-        # 构建新的文件名
-        new_fq1 = os.path.join(outdir, f'{PATIENT_TISSUE}_S1_{LANE}_R1_{LIBRARY}.fastq')
-        new_fq2 = os.path.join(outdir, f'{PATIENT_TISSUE}_S1_{LANE}_R2_{LIBRARY}.fastq')
-
-
-        # 创建软链接
-        # execute(f'''ln -s {fq1} {new_fq1} ''')
-        # execute(f'''ln -s {fq2} {new_fq2} ''')
+        # Create symlinks
         subprocess.call(['ln', '-s', fq1, new_fq1])
         subprocess.call(['ln', '-s', fq2, new_fq2])
-        # 构建处理信息字典
+        
+        # Build processing info dictionary
         processing_info.append({
-            'file_type': TYPE,
-            'Lane': LANE,
-            'Library': LIBRARY,
+            'file_type': file_type,
+            'Lane': lane,
+            'Library': library,
             'Original_fq1': fq1,
             'New_fq1': new_fq1,
             'Original_fq2': fq2,
             'New_fq2': new_fq2
         })
-    elif fq1.endswith(".fastq.gz") and fq2.endswith(".fastq.gz"):
-        TYPE = 'fastq.gz'
-        # 构建新的文件名
-        new_fq1 = os.path.join(outdir, f'{PATIENT_TISSUE}_S1_{LANE}_R1_{LIBRARY}.fastq.gz')
-        new_fq2 = os.path.join(outdir, f'{PATIENT_TISSUE}_S1_{LANE}_R2_{LIBRARY}.fastq.gz')
+    elif (fq1.endswith(".fastq.gz") and fq2.endswith(".fastq.gz")) or (fq1.endswith(".fq.gz") and fq2.endswith(".fq.gz")):
+        file_type = 'fastq.gz'
+        # Build new filenames
+        new_fq1 = os.path.join(outdir, f'{patient_tissue}_S1_{lane}_R1_{library}.fastq.gz')
+        new_fq2 = os.path.join(outdir, f'{patient_tissue}_S1_{lane}_R2_{library}.fastq.gz')
 
-        # 创建软链接
+        # Create symlinks
         subprocess.call(['ln', '-s', fq1, new_fq1])
         subprocess.call(['ln', '-s', fq2, new_fq2])
 
-        # 构建处理信息字典
+        # Build processing info dictionary
         processing_info.append({
-            'file_type': TYPE,
-            'Lane': LANE,
-            'Library': LIBRARY,
+            'file_type': file_type,
+            'Lane': lane,
+            'Library': library,
             'Original_fq1': fq1,
             'New_fq1': new_fq1,
             'Original_fq2': fq2,
             'New_fq2': new_fq2
         })
     else:
-        print(f"Skipping files {fq1} and {fq2} with incorrect extensions.")
+        raise ValueError("The file extension must be either .fastq or .fastq.gz")
 
-# 将处理信息写入JSON文件
+# Write processing information to JSON file
 with open(snakemake.output[0], 'w') as json_file:
     json.dump(processing_info, json_file, indent=4)
