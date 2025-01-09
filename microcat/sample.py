@@ -114,8 +114,8 @@ def parse_bam_samples(sample_tsv, platform):
     is_bam = False
 
     # Check if id, fq1, fq2 columns exist
-    if not set(['id', 'bam']).issubset(samples_df.columns):
-        raise ValueError("Columns 'id', 'bam', must exist in the sample.tsv")
+    if not set(['id', 'bam','mtx']).issubset(samples_df.columns):
+        raise ValueError("Columns 'id', 'bam','mtx' must exist in the sample.tsv")
 
     
     # Extract library, lane, and plate from id
@@ -134,15 +134,12 @@ def parse_bam_samples(sample_tsv, platform):
     elif platform == 'plate':
         samples_df['is_plate'] = samples_df['patient_tissue_lane_plate'].apply(lambda x: x.split('_')[-1].startswith("P"))
         samples_df.loc[samples_df['is_plate'], 'plate'] = samples_df['patient_tissue_lane_plate'].apply(lambda x: x.split('_')[-1])
-        samples_df['patient_tissue_cell'] = samples_df['patient_tissue_lane_plate'].apply(lambda x: '_'.join(x.split('_')[:-1]))
         # Extract patient and tissue, using the fact that tissue is always "S" followed by a number
         # and is always the last part in patient_tissue
-        samples_df['tissue'] = samples_df['patient_tissue_cell'].str.extract(r'(S\d+)_')
-        # 提取patient和cell
-        samples_df[['patient', 'cell']] = samples_df['patient_tissue_cell'].str.extract(r'(.+)_S\d+_(.+)')
+        samples_df['patient_tissue'] = samples_df['patient_tissue_lane_plate'].apply(lambda x: '_'.join(x.split('_')[:-1]))
+        samples_df['tissue'] = samples_df['patient_tissue'].apply(lambda x: x.split('_')[-1])
+        samples_df['patient'] = samples_df['patient_tissue'].apply(lambda x: '_'.join(x.split('_')[:-1]))
         samples_df = samples_df.drop(columns=['patient_tissue_lane_plate'])
-        samples_df = samples_df.drop(columns=['patient_tissue_cell'])
-        samples_df['patient_tissue'] = samples_df['patient'] + '_' + samples_df['tissue']
     else:
         raise ValueError("Platform must be either 'lane' or 'plate'")
 
@@ -163,7 +160,7 @@ def parse_bam_samples(sample_tsv, platform):
     if platform == 'lane':
         samples_df = samples_df.set_index(["sample_id","patient", "tissue", "lane", "library"])
     elif platform == 'plate':
-        samples_df = samples_df.set_index(["sample_id","patient", "cell","tissue", "plate", "library"])
+        samples_df = samples_df.set_index(["sample_id","patient", "tissue", "plate", "library"])
     
     # Create a 'fastqs_dir' column that contains the directory of the fastq files
     samples_df['fastqs_dir'] = samples_df['bam'].apply(lambda x: '/'.join(x.split('/')[:-1]))
@@ -178,32 +175,22 @@ def parse_bam_samples(sample_tsv, platform):
         bam_exists = os.path.isfile(row['bam'])
         if not bam_exists:
             raise FileNotFoundError(f"File not found: {row['bam']}")
-
+        
+        # Check the mtx file
+        mtx_path = row['mtx']
+        if os.path.isdir(mtx_path):
+            # Check if the directory is empty
+            if not os.listdir(mtx_path):
+                raise FileNotFoundError(f"Directory is empty: {mtx_path}")
+        elif os.path.isfile(mtx_path):
+            # If it's a file, check if it exists
+            if not os.path.exists(mtx_path):
+                raise FileNotFoundError(f"File not found: {mtx_path}")
+        else:
+            raise FileNotFoundError(f"Invalid path: {mtx_path}")
     return samples_df
 
 
-
-# def get_starsolo_sample_id(SAMPLES, wildcards, fq_column):
-#     sample_id = wildcards.sample
-#     try:
-#         file_path = SAMPLES.loc[sample_id, fq_column]
-#     except KeyError:
-#         raise ValueError(f"Sample ID '{sample_id}' not found in SAMPLES DataFrame.")
-#     return ','.join(sorted(file_path))
-
-# def get_starsolo_sample_id(SAMPLES, wildcards, fq_column):
-#     sample_id = wildcards.sample
-#     try:
-#         file_paths = SAMPLES.loc[sample_id, fq_column]
-#     except KeyError:
-#         raise ValueError(f"Sample ID '{sample_id}' not found in SAMPLES DataFrame.")
-    
-#     # If there is only one lane, the file_paths will be a string instead of a list
-#     # In that case, convert it to a list
-#     if isinstance(file_paths, str):
-#         file_paths = [file_paths]
-    
-#     return ','.join(sorted(file_paths))
 def get_starsolo_sample_id(SAMPLES, wildcards, fq_column):
     sample_id = wildcards.sample
     try:
@@ -216,14 +203,6 @@ def get_starsolo_sample_id(SAMPLES, wildcards, fq_column):
         return joined_paths
     except KeyError:
         raise ValueError(f"Sample ID '{sample_id}' not found in SAMPLES DataFrame.")
-# def get_starsolo_sample_id(samples, wildcards, read):
-#     sample_reads = [s[read] for s in samples if s['sample'] == wildcards.sample]
-#     if read == "fq1":
-#         return ','.join(sorted(sample_reads))
-#     elif read == "fq2":
-#         return ' '.join(sorted(sample_reads))
-
-
     
 
 def get_sample_id(SAMPLES, wildcards, col):
