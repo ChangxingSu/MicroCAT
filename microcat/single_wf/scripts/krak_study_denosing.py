@@ -71,14 +71,13 @@ def read_kraken_reports(files, sample_names=None, study_name=None, min_reads=2, 
             'sample': sample_names[i],
             'rank': tmp['classification_rank'],
             'ncbi_taxa': tmp['ncbi_taxa'],
-            'species_level_taxid': tmp['species_level_taxid'],
+            'main_level_taxid': tmp['main_level_taxid'],
             'sci_name': tmp['scientific name'],
             'reads': tmp['fragments'],
             'minimizers': tmp['max_minimizers'],
             'uniqminimizers': tmp['max_uniqminimizers'],
-            'entropy': tmp['average_seq_entropy'],
-            'max_contig': tmp['max_seq_length'],
-            'mean_contig': tmp['mean_seq_length'],
+            'classification_rank': tmp['classification_rank'],
+            'genus_level_taxid': tmp['genus_level_taxid'],
             'superkingdom': tmp['superkingdom']
         })
 
@@ -97,9 +96,9 @@ def main():
     parser.add_argument('--out_path',
                         type=str,
                         help='Result output path')
-    parser.add_argument('--sample_name',
-                        type=str,
-                        help='One sample name corresponding to the input files')
+    # parser.add_argument('--sample_name',
+    #                     type=str,
+    #                     help='One sample name corresponding to the input files')
     parser.add_argument('--study_name',
                         type=str,
                         help='Name of the study')
@@ -146,7 +145,7 @@ def main():
         raise ValueError("Either --path or --file_list must be provided")
 
     out_path = args.out_path
-    sample_name = args.sample_name
+    # sample_name = args.sample_name
     study_name = args.study_name
     min_reads = args.min_reads
     min_uniq = args.min_uniq
@@ -162,85 +161,125 @@ def main():
     logger.info('Checking sample number', status='run')
 
     # 1. Check number of samples
-    if len(kraken_reports_all['sample'].unique()) > 4:
+    if len(kraken_reports_all['sample'].unique()) > 5:
         logger.info('Calculating correlations and p-values', status='run')
 
         kraken_reports_all_species = kraken_reports_all.copy()
 
-        kraken_reports_all_species['species_reads'] = kraken_reports_all_species.groupby(['sample','species_level_taxid'])['reads'].transform('sum')
-        kraken_reports_all_species['species_uniqminimizers'] = kraken_reports_all_species.groupby(['sample','species_level_taxid'])['uniqminimizers'].transform('sum')
-        kraken_reports_all_species['species_minimizers'] = kraken_reports_all_species.groupby(['sample','species_level_taxid'])['minimizers'].transform('sum')
+        kraken_reports_all_species['taxa_reads'] = np.where(
+            kraken_reports_all_species['classification_rank'].str.startswith('S'),
+            kraken_reports_all_species.groupby(['sample','main_level_taxid'])['reads'].transform('sum'),
+            kraken_reports_all_species.groupby(['sample','genus_level_taxid'])['reads'].transform('sum')
+        )
+        kraken_reports_all_species['taxa_uniqminimizers'] = np.where(
+            kraken_reports_all_species['classification_rank'].str.startswith('S'),
+            kraken_reports_all_species.groupby(['sample','main_level_taxid'])['uniqminimizers'].transform('sum'),
+            kraken_reports_all_species.groupby(['sample','genus_level_taxid'])['uniqminimizers'].transform('sum')
+        )
+        kraken_reports_all_species['taxa_minimizers'] = np.where(
+            kraken_reports_all_species['classification_rank'].str.startswith('S'),
+            kraken_reports_all_species.groupby(['sample','main_level_taxid'])['minimizers'].transform('sum'),
+            kraken_reports_all_species.groupby(['sample','genus_level_taxid'])['minimizers'].transform('sum')
+        )
+
+
         # kraken_reports_all_species = kraken_reports_all.copy().groupby(['sample','species_level_taxid'], as_index=False).agg(
         #     {'reads':'sum',
         #     'minimizers': 'sum',
         #     'uniqminimizers': 'sum'}
         #     ).drop_duplicates()
-        kraken_reports_all_species = kraken_reports_all_species[~kraken_reports_all_species.duplicated(subset=['sample', 'species_level_taxid'], keep=False)]
 
+        kraken_reports_all_species = kraken_reports_all_species[~kraken_reports_all_species.duplicated(subset=['sample', 'main_level_taxid'],  keep='first')]
         # 2. Calculate correlations and p-values
         # Group
-
-        grouped = kraken_reports_all_species.groupby('species_level_taxid') 
-
+        grouped = kraken_reports_all_species.groupby('main_level_taxid') 
         for name, group in grouped:
 
             if len(group) > 1:
 
-                corr_reads_min, pval_reads_min = spearmanr(group['species_reads'], group['species_minimizers'])  
-                corr_reads_uniq, pval_reads_uniq = spearmanr(group['species_reads'], group['species_uniqminimizers'])
-                corr_min_uniq, pval_min_uniq = spearmanr(group['species_minimizers'], group['species_uniqminimizers'])
-                
+                corr_reads_min, pval_reads_min = spearmanr(group['taxa_reads'], group['taxa_minimizers'])  
+                corr_reads_uniq, pval_reads_uniq = spearmanr(group['taxa_reads'], group['taxa_uniqminimizers'])
+                corr_min_uniq, pval_min_uniq = spearmanr(group['taxa_minimizers'], group['taxa_uniqminimizers'])
+
                 # 直接赋值
-                kraken_reports_all_species.loc[kraken_reports_all_species['species_level_taxid'] == name, 'corr_reads_min'] = corr_reads_min
-                kraken_reports_all_species.loc[kraken_reports_all_species['species_level_taxid'] == name, 'pval_reads_min'] = pval_reads_min
-                kraken_reports_all_species.loc[kraken_reports_all_species['species_level_taxid'] == name, 'corr_reads_uniq'] = corr_reads_uniq 
-                kraken_reports_all_species.loc[kraken_reports_all_species['species_level_taxid'] == name, 'pval_reads_uniq'] = pval_reads_uniq
-                kraken_reports_all_species.loc[kraken_reports_all_species['species_level_taxid'] == name, 'corr_min_uniq'] = corr_min_uniq
-                kraken_reports_all_species.loc[kraken_reports_all_species['species_level_taxid'] == name, 'pval_min_uniq'] = pval_min_uniq
+                kraken_reports_all_species.loc[kraken_reports_all_species['main_level_taxid'] == name, 'corr_reads_min'] = corr_reads_min
+                kraken_reports_all_species.loc[kraken_reports_all_species['main_level_taxid'] == name, 'pval_reads_min'] = pval_reads_min
+                kraken_reports_all_species.loc[kraken_reports_all_species['main_level_taxid'] == name, 'corr_reads_uniq'] = corr_reads_uniq 
+                kraken_reports_all_species.loc[kraken_reports_all_species['main_level_taxid'] == name, 'pval_reads_uniq'] = pval_reads_uniq
+                kraken_reports_all_species.loc[kraken_reports_all_species['main_level_taxid'] == name, 'corr_min_uniq'] = corr_min_uniq
+                kraken_reports_all_species.loc[kraken_reports_all_species['main_level_taxid'] == name, 'pval_min_uniq'] = pval_min_uniq
+
 
             else:
                 # 处理只有一行的情况
-                kraken_reports_all_species.loc[kraken_reports_all_species['species_level_taxid'] == name, 'corr_reads_min'] = np.nan
-                kraken_reports_all_species.loc[kraken_reports_all_species['species_level_taxid'] == name, 'pval_reads_min'] = np.nan
-                kraken_reports_all_species.loc[kraken_reports_all_species['species_level_taxid'] == name, 'corr_reads_uniq'] = np.nan
-                kraken_reports_all_species.loc[kraken_reports_all_species['species_level_taxid'] == name, 'pval_reads_uniq'] = np.nan
-                kraken_reports_all_species.loc[kraken_reports_all_species['species_level_taxid'] == name, 'corr_min_uniq'] = np.nan
-                kraken_reports_all_species.loc[kraken_reports_all_species['species_level_taxid'] == name, 'pval_min_uniq'] = np.nan
+                kraken_reports_all_species.loc[kraken_reports_all_species['main_level_taxid'] == name, 'corr_reads_min'] = np.nan
+                kraken_reports_all_species.loc[kraken_reports_all_species['main_level_taxid'] == name, 'pval_reads_min'] = np.nan
+                kraken_reports_all_species.loc[kraken_reports_all_species['main_level_taxid'] == name, 'corr_reads_uniq'] = np.nan
+                kraken_reports_all_species.loc[kraken_reports_all_species['main_level_taxid'] == name, 'pval_reads_uniq'] = np.nan
+                kraken_reports_all_species.loc[kraken_reports_all_species['main_level_taxid'] == name, 'corr_min_uniq'] = np.nan
+                kraken_reports_all_species.loc[kraken_reports_all_species['main_level_taxid'] == name, 'pval_min_uniq'] = np.nan
+
 
         # Log the completion of correlation and p-value calculations
         logger.info('Correlation and p-value calculations completed', status='complete')
 
-        # Perform multiple comparison correction (Benjamini-Hochberg method)
-        # Columns that require correction
-        pval_columns = ['pval_reads_min', 'pval_reads_uniq', 'pval_min_uniq']
+        # # Perform multiple comparison correction (Benjamini-Hochberg method)
+        # # Columns that require correction
+        # pval_columns = ['pval_reads_min', 'pval_reads_uniq', 'pval_min_uniq']
 
-        # Perform correction
-        for col in pval_columns:
+        # # Perform correction
+        # for col in pval_columns:
 
-            if kraken_reports_all_species[col].max() < 1:
-                _, pvals_corrected, _, _ = multipletests(kraken_reports_all_species[col], alpha=0.05, method='fdr_bh')
-                kraken_reports_all_species[col] = pvals_corrected
-            else:
-                # 不进行处理
-                pass
+        #     if kraken_reports_all_species[col].max() < 1:
+        #         _, pvals_corrected, _, _ = multipletests(kraken_reports_all_species[col], alpha=0.05, method='fdr_bh')
+        #         kraken_reports_all_species[col] = pvals_corrected
+        #     else:
+        #         # 不进行处理
+        #         pass
 
         # Log the completion of multiple comparison correction
-        logger.info(f'Multiple comparison correction completed', status='complete')
+        # logger.info(f'Multiple comparison correction completed', status='complete')
+
+        # kraken_reports_all_species = kraken_reports_all_species[
+        # ((kraken_reports_all_species['corr_reads_min'] > 0) &
+        # (kraken_reports_all_species['pval_reads_min'] < 0.05) &
+        # (kraken_reports_all_species['corr_reads_uniq'] > 0) &
+        # (kraken_reports_all_species['pval_reads_uniq'] < 0.05) &
+        # (kraken_reports_all_species['corr_min_uniq'] > 0) &
+        # (kraken_reports_all_species['pval_min_uniq'] < 0.05))  |
+        # (
+        #     (kraken_reports_all_species['corr_reads_min']>0) &
+        #     (kraken_reports_all_species['pval_reads_min'].isna()) &
+        #     (kraken_reports_all_species['corr_reads_uniq']>0) &
+        #     (kraken_reports_all_species['pval_reads_uniq'].isna()) &
+        #     (kraken_reports_all_species['corr_min_uniq']>0) &
+        #     (kraken_reports_all_species['pval_min_uniq'].isna())
+        # )
+        # |
+        # ((kraken_reports_all_species['corr_reads_min'] > 0) &
+        # (kraken_reports_all_species['pval_reads_min'] < 0.05) &
+        # (kraken_reports_all_species['corr_reads_uniq'] > 0.2) &
+        # (kraken_reports_all_species['corr_min_uniq'] > 0.2) )
+
         kraken_reports_all_species = kraken_reports_all_species[
-        ((kraken_reports_all_species['corr_reads_min'] > 0) &
-        (kraken_reports_all_species['pval_reads_min'] < 0.05) &
-        (kraken_reports_all_species['corr_reads_uniq'] > 0) &
-        (kraken_reports_all_species['pval_reads_uniq'] < 0.05) &
-        (kraken_reports_all_species['corr_min_uniq'] > 0) &
-        (kraken_reports_all_species['pval_min_uniq'] < 0.05))  |
-        (
-            (kraken_reports_all_species['corr_reads_min']>0) &
-            (kraken_reports_all_species['pval_reads_min'].isna()) &
-            (kraken_reports_all_species['corr_reads_uniq']>0) &
-            (kraken_reports_all_species['pval_reads_uniq'].isna()) &
-            (kraken_reports_all_species['corr_min_uniq']>0) &
-            (kraken_reports_all_species['pval_min_uniq'].isna())
-        )
+            ~(
+                ((kraken_reports_all_species['corr_reads_min'] < 0) &
+                (kraken_reports_all_species['pval_reads_min'] > 0.05) &
+                (kraken_reports_all_species['corr_reads_uniq'] < 0) &
+                (kraken_reports_all_species['pval_reads_uniq'] > 0.05) &
+                (kraken_reports_all_species['corr_min_uniq'] < 0) &
+                (kraken_reports_all_species['pval_min_uniq'] > 0.05))  |
+                (
+                    (kraken_reports_all_species['corr_reads_min'] < 0) &
+                    (kraken_reports_all_species['pval_reads_min'].isna()) &
+                    (kraken_reports_all_species['corr_reads_uniq'] <0) &
+                    (kraken_reports_all_species['pval_reads_uniq'].isna()) &
+                    (kraken_reports_all_species['corr_min_uniq'] <0) &
+                    (kraken_reports_all_species['pval_min_uniq'].isna())
+                )
+            )
+        ]
+
         # (
         #     (kraken_reports_all_species['corr_reads_min'].isna()) &
         #     (kraken_reports_all_species['pval_reads_min'].isna()) &
@@ -249,7 +288,10 @@ def main():
         #     (kraken_reports_all_species['corr_min_uniq'].isna()) &
         #     (kraken_reports_all_species['pval_min_uniq'].isna())
         # )
-        ]
+
+        # kraken_reports_all_species = kraken_reports_all_species.loc[kraken_reports_all_species['main_level_taxid']==1763]
+        # print(kraken_reports_all_species)
+
         # logger.info(f'Calculating quantile with containments', status='run')
 
         # cell_lines = pd.read_csv(celline_file,sep="\t")
@@ -262,11 +304,13 @@ def main():
 
         # quantiles['CLrpmm_cellline'] = cell_lines.groupby('name')['rpmm'].transform(lambda x: 10 ** np.quantile(np.log10(x),qtile, interpolation='midpoint'))
         # quantiles= quantiles.drop_duplicates(subset=['name', 'taxid'], keep='first')
-        # candidate_species_all = kraken_reports_all[kraken_reports_all['species_level_taxid'].isin(kraken_reports_all_species["species_level_taxid"])]
-        # # candidate_species_all = kraken_reports_all_species[['rank', 'species_level_taxid', 'sci_name']]
+        candidate_species_all = kraken_reports_all[kraken_reports_all['main_level_taxid'].isin(kraken_reports_all_species["main_level_taxid"])]
+        # candidate_species_all = candidate_species_all.loc[candidate_species_all["classification_rank"] == "S"]
+        candidate_species_all = kraken_reports_all[kraken_reports_all['classification_rank'].str.startswith('S')]        
+        # candidate_species_all = kraken_reports_all_species[['rank', 'species_level_taxid', 'sci_name']]
         # candidate_species_all = candidate_species_all.drop_duplicates()
         # candidate_species_all = candidate_species_all[['ncbi_taxa','rank', 'species_level_taxid', 'sci_name']]
-        # candidate_species_all = candidate_species_all.drop_duplicates(subset='ncbi_taxa')
+        # candidate_species_all = candidate_species_all.drop_duplicates(subset='species_level_taxid')
 
         # num_unique_species = len(candidate_species_all['species_level_taxid'].unique())
         # logger.info(f"Number of species after filtering: {num_unique_species}", status='summary')
@@ -338,15 +382,17 @@ def main():
         # logger.info(f'Finishing saving the result', status='complete')
         # Log the 
         # logger.info(f'Could not caulate correlation and distrubtion since sample less than 5', status='complete')
-        kraken_reports_all_species['sample'] = kraken_reports_all_species['sample'].astype(str)
-        kraken_reports_all_species['sample'] = kraken_reports_all_species['sample'].str.replace('/.*','')
-        kraken_reports_all_species['sample'] = kraken_reports_all_species['sample'].str.replace('_krak_sample_denosing', '')
-        kraken_reports_specific = kraken_reports_all_species.loc[kraken_reports_all_species['sample'] == sample_name]
-        filter_kraken_reports_specific = kraken_reports_specific.copy()
+        # kraken_reports_all_species['sample'] = kraken_reports_all_species['sample'].astype(str)
+        # kraken_reports_all_species['sample'] = kraken_reports_all_species['sample'].str.replace('/.*','')
+        # kraken_reports_all_species['sample'] = kraken_reports_all_species['sample'].str.replace('_krak_sample_denosing', '')
+        # kraken_reports_specific = kraken_reports_all_species.loc[kraken_reports_all_species['sample'] == sample_name]
+        # filter_kraken_reports_specific = kraken_reports_specific.copy()
 
-        logger.info(f'Saving the result', status='run')
-        # Save the filtered data to CSV
-        filter_kraken_reports_specific.to_csv(out_path, sep='\t', index=False)
+        # logger.info(f'Saving the result', status='run')
+        # # Save the filtered data to CSV
+        # filter_kraken_reports_specific.to_csv(out_path, sep='\t', index=False)
+
+        candidate_species_all.to_csv(args.out_path, sep='\t', index=False)
     else:
         # # Log the 
         # logger.info(f'Could not caulate correlation and distrubtion since sample less than 4', status='complete')
@@ -359,18 +405,20 @@ def main():
         # # Save the filtered data to CSV
         # candidate_species_all.to_csv(out_path, sep='\t', index=False)
         # logger.info(f'Finishing saving the result', status='complete')
+        # kraken_reports_all_species = kraken_reports_all.copy()
+        # kraken_reports_all_species['sample'] = kraken_reports_all_species['sample'].astype(str)
+        # kraken_reports_all_species['sample'] = kraken_reports_all_species['sample'].str.replace('/.*','')
+        # kraken_reports_all_species['sample'] = kraken_reports_all_species['sample'].str.replace('_krak_sample_denosing', '')
+        # kraken_reports_specific = kraken_reports_all_species.loc[kraken_reports_all_species['sample'] == sample_name]
+        # filter_kraken_reports_specific = kraken_reports_specific.copy()
         kraken_reports_all_species = kraken_reports_all.copy()
-        kraken_reports_all_species['sample'] = kraken_reports_all_species['sample'].astype(str)
-        kraken_reports_all_species['sample'] = kraken_reports_all_species['sample'].str.replace('/.*','')
-        kraken_reports_all_species['sample'] = kraken_reports_all_species['sample'].str.replace('_krak_sample_denosing', '')
-        kraken_reports_specific = kraken_reports_all_species.loc[kraken_reports_all_species['sample'] == sample_name]
-        filter_kraken_reports_specific = kraken_reports_specific.copy()
 
+        # candidate_species_all = kraken_reports_all.loc[kraken_reports_all["classification_rank"] == "S"]
+        candidate_species_all = kraken_reports_all[kraken_reports_all['classification_rank'].str.startswith('S')]
         logger.info(f'Saving the result', status='run')
         # Save the filtered data to CSV
-        filter_kraken_reports_specific.to_csv(out_path, sep='\t', index=False)
-
-
+        # filter_kraken_reports_specific.to_csv(out_path, sep='\t', index=False)
+        candidate_species_all.to_csv(args.out_path, sep='\t', index=False)
 
 if __name__ == "__main__":
     main()
