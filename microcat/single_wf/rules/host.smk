@@ -1,4 +1,6 @@
-localrules: generate_se_manifest_file, generate_pe_manifest_file
+import os
+import subprocess
+localrules: generate_se_manifest_file, generate_pe_manifest_file, raw_prepare_reads
 
 if config["params"]["host"]["starsolo"]["do"]:
     if config["params"]["host"]["starsolo"]["soloType"]=="CB_UMI_Simple":
@@ -231,7 +233,7 @@ if config["params"]["host"]["starsolo"]["do"]:
                         file_command=''
                     fi
                     
-                    # 将资源参数 mem_mb 转换为字节
+                    # transform mem_mb to bytes
                     mem_bytes=$(expr {resources.mem_mb} \* 1048576);
 
                     mkdir -p {params.starsolo_out}; 
@@ -287,8 +289,8 @@ if config["params"]["host"]["starsolo"]["do"]:
                     config["output"]["host"],
                     "unmapped_host/{sample}/Aligned_sortedByCoord_unmapped_out.bam")
             ## because bam is sorted by Coord,it's necessary to sort it by read name
-            conda:
-                config["envs"]["star"]
+            # conda:
+            #     config["envs"]["star"]
             threads:
                 config["resources"]["samtools_extract"]["threads"]
             resources:
@@ -299,13 +301,31 @@ if config["params"]["host"]["starsolo"]["do"]:
             benchmark:
                 os.path.join(config["benchmarks"]["host"],
                             "{sample}/unmapped_extracted_sorted_bam.benchmark")
-            shell:
-                '''
-                samtools view --threads  {threads}  -b -f 4  {input.mapped_bam_file}  >  {params.unmapped_bam_unsorted_file};\
-                samtools sort -n  --threads  {threads} {params.unmapped_bam_unsorted_file} -o {output.unmapped_bam_sorted_file};\
-                samtools index -@  {threads} {output.unmapped_bam_sorted_file} -o {output.unmapped_bam_sorted_index};\
-                rm -rf {params.unmapped_bam_unsorted_file};
-                '''
+            run:
+                # Run the samtools view command
+                shell(
+                    'samtools view --threads {threads} -b -f 4 {input.mapped_bam_file} > {params.unmapped_bam_unsorted_file}'
+                )
+
+                # Run samtools view to get the first 10 lines of the BAM file
+                result = subprocess.run(f'samtools view {params.unmapped_bam_unsorted_file} | head -n 10', shell=True, capture_output=True)
+
+                # Decode the bytes to a string
+                head_output_str = result.stdout.decode('utf-8')
+                # Count the number of lines in the head output
+                line_count = len(head_output_str.strip().split('\n'))
+                
+                # Check if the line count is zero and raise an exception if true
+                if line_count == 0:
+                     raise ValueError(f"Error: The unmapped BAM unsorted file for sample {wildcards.sample} is empty. Please check your data.")
+                # Continue with the remaining shell commands
+                shell(
+                    '''
+                    samtools sort -n --threads {threads} {params.unmapped_bam_unsorted_file} -o {output.unmapped_bam_sorted_file};\
+                    samtools index -@ {threads} {output.unmapped_bam_sorted_file} -o {output.unmapped_bam_sorted_index};\
+                    rm -rf {params.unmapped_bam_unsorted_file};
+                    '''
+                )
         rule starsolo_CB_UMI_Simple_all:
             input:
                 expand(os.path.join(config["output"]["host"],"unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam"),sample=SAMPLES_ID_LIST),
@@ -543,32 +563,76 @@ if config["params"]["host"]["starsolo"]["do"]:
                             "{sample}/unmapped_sorted_bam.benchmark")
             threads:
                 config["resources"]["samtools_extract"]["threads"]
-            conda:
-                config["envs"]["star"]
+            # conda:
+            #     config["envs"]["star"]
             resources:
                 mem_mb=config["resources"]["samtools_extract"]["mem_mb"],
-            shell:
-                '''
-                if [ -s "{input.mapped_se_bam_file}" ] && [ -s "{input.mapped_pe_bam_file}" ]; then
-                    samtools view --threads {threads} -b -f 4 {input.mapped_se_bam_file} > {params.unmapped_se_bam_unsorted_file}
-                    samtools view --threads {threads} -b -f 4 {input.mapped_pe_bam_file} > {params.unmapped_pe_bam_unsorted_file}
-                    samtools merge -@ {threads} {params.unmapped_bam_unsorted_file} {params.unmapped_pe_bam_unsorted_file} {params.unmapped_se_bam_unsorted_file}
-                    rm -rf {params.unmapped_se_bam_unsorted_file}
-                    rm -rf {params.unmapped_se_bam_unsorted_file}
-                elif [ -s "{input.mapped_pe_bam_file}" ]; then
-                    samtools view --threads {threads} -b -f 4 {input.mapped_pe_bam_file} > {params.unmapped_bam_unsorted_file}
-                elif [ -s "{input.mapped_se_bam_file}" ]; then
-                    samtools view --threads {threads} -b -f 4 {input.mapped_se_bam_file} > {params.unmapped_bam_unsorted_file}
-                else
-                    echo "Both mapped BAM files are empty! Exiting..."
-                    exit 1
-                fi
+            run:
+                # Check if both mapped BAM files are not empty
+                if os.path.getsize(input.mapped_se_bam_file) > 0 and os.path.getsize(input.mapped_pe_bam_file) > 0:
+                    shell(
+                        '''
+                        samtools view --threads {threads} -b -f 4 {input.mapped_se_bam_file} > {params.unmapped_se_bam_unsorted_file}
+                        samtools view --threads {threads} -b -f 4 {input.mapped_pe_bam_file} > {params.unmapped_pe_bam_unsorted_file}
+                        samtools merge -@ {threads} {params.unmapped_bam_unsorted_file} {params.unmapped_pe_bam_unsorted_file} {params.unmapped_se_bam_unsorted_file}
+                        rm -rf {params.unmapped_se_bam_unsorted_file}
+                        rm -rf {params.unmapped_pe_bam_unsorted_file}
+                        '''
+                    )
+                elif os.path.getsize(input.mapped_pe_bam_file) > 0:
+                    shell(
+                        '''
+                        samtools view --threads {threads} -b -f 4 {input.mapped_pe_bam_file} > {params.unmapped_bam_unsorted_file}
+                        '''
+                    )
+                elif os.path.getsize(input.mapped_se_bam_file) > 0:
+                    shell(
+                        '''
+                        samtools view --threads {threads} -b -f 4 {input.mapped_se_bam_file} > {params.unmapped_bam_unsorted_file}
+                        '''
+                    )
+                else:
+                    raise ValueError("Both mapped BAM files are empty! Exiting...")
 
-                samtools sort -n  --threads  {threads} {params.unmapped_bam_unsorted_file} -o {output.unmapped_sorted_bam_file};\
-                samtools index -@  {threads} {output.unmapped_sorted_bam_file} -o {output.unmapped_bam_sorted_index};\
+                # Run samtools view to get the first 10 lines of the BAM file
+                result = subprocess.run(f'samtools view {params.unmapped_bam_unsorted_file} | head -n 10', shell=True, capture_output=True)
+
+                # Decode the bytes to a string
+                head_output_str = result.stdout.decode('utf-8')
+                # Count the number of lines in the head output
+                line_count = len(head_output_str.strip().split('\n'))
                 
-                rm -rf {params.unmapped_bam_unsorted_file}
-                '''
+                # Check if the line count is zero and raise an exception if true
+                if line_count == 0:
+                    raise ValueError(f"Error: The unmapped BAM unsorted file for sample {wildcards.sample} is empty. Please check your data.")
+                shell(
+                    '''
+                    samtools sort -n --threads {threads} {params.unmapped_bam_unsorted_file} -o {output.unmapped_sorted_bam_file}
+                    samtools index -@ {threads} {output.unmapped_sorted_bam_file} -o {output.unmapped_bam_sorted_index}
+                    rm -rf {params.unmapped_bam_unsorted_file}
+                    '''
+                )
+                # '''
+                # if [ -s "{input.mapped_se_bam_file}" ] && [ -s "{input.mapped_pe_bam_file}" ]; then
+                #     samtools view --threads {threads} -b -f 4 {input.mapped_se_bam_file} > {params.unmapped_se_bam_unsorted_file}
+                #     samtools view --threads {threads} -b -f 4 {input.mapped_pe_bam_file} > {params.unmapped_pe_bam_unsorted_file}
+                #     samtools merge -@ {threads} {params.unmapped_bam_unsorted_file} {params.unmapped_pe_bam_unsorted_file} {params.unmapped_se_bam_unsorted_file}
+                #     rm -rf {params.unmapped_se_bam_unsorted_file}
+                #     rm -rf {params.unmapped_se_bam_unsorted_file}
+                # elif [ -s "{input.mapped_pe_bam_file}" ]; then
+                #     samtools view --threads {threads} -b -f 4 {input.mapped_pe_bam_file} > {params.unmapped_bam_unsorted_file}
+                # elif [ -s "{input.mapped_se_bam_file}" ]; then
+                #     samtools view --threads {threads} -b -f 4 {input.mapped_se_bam_file} > {params.unmapped_bam_unsorted_file}
+                # else
+                #     echo "Both mapped BAM files are empty! Exiting..."
+                #     exit 1
+                # fi
+
+                # samtools sort -n  --threads  {threads} {params.unmapped_bam_unsorted_file} -o {output.unmapped_sorted_bam_file};\
+                # samtools index -@  {threads} {output.unmapped_sorted_bam_file} -o {output.unmapped_bam_sorted_index};\
+                
+                # rm -rf {params.unmapped_bam_unsorted_file}
+                # '''
         rule starsolo_SmartSeq_all:
             input:
                 expand(os.path.join(
@@ -709,8 +773,8 @@ if config["params"]["host"]["starsolo"]["do"]:
                         config["output"]["host"],
                         "unmapped_host/{sample}/Aligned_sortedByCoord_unmapped_out.bam")
                 ## because bam is sorted by Coord,it's necessary to sort it by read name
-                conda:
-                    config["envs"]["star"]
+                # conda:
+                #     config["envs"]["star"]
                 threads:
                     config["resources"]["samtools_extract"]["threads"]
                 resources:
@@ -721,13 +785,31 @@ if config["params"]["host"]["starsolo"]["do"]:
                 benchmark:
                     os.path.join(config["benchmarks"]["host"],
                                 "{sample}/unmapped_extracted_sorted_bam.benchmark")
-                shell:
-                    '''
-                    samtools view --threads  {threads}  -b -f 4  {input.mapped_bam_file}  >  {params.unmapped_bam_unsorted_file};\
-                    samtools sort -n  --threads  {threads} {params.unmapped_bam_unsorted_file} -o {output.unmapped_bam_sorted_file};\
-                    samtools index -@  {threads} {output.unmapped_bam_sorted_file} -o {output.unmapped_bam_sorted_index};\
-                    rm -rf {params.unmapped_bam_unsorted_file};
-                    '''
+                run:
+                    # Run the samtools view command
+                    shell(
+                        'samtools view --threads {threads} -b -f 4 {input.mapped_bam_file} > {params.unmapped_bam_unsorted_file}'
+                    )
+
+                    # Run samtools view to get the first 10 lines of the BAM file
+                    result = subprocess.run(f'samtools view {params.unmapped_bam_unsorted_file} | head -n 10', shell=True, capture_output=True)
+
+                    # Decode the bytes to a string
+                    head_output_str = result.stdout.decode('utf-8')
+                    # Count the number of lines in the head output
+                    line_count = len(head_output_str.strip().split('\n'))
+                    
+                    # Check if the line count is zero and raise an exception if true
+                    if line_count == 0:
+                        raise ValueError(f"Error: The unmapped BAM unsorted file for sample {wildcards.sample} is empty. Please check your data.")
+                    # Continue with the remaining shell commands
+                    shell(
+                        '''
+                        samtools sort -n --threads {threads} {params.unmapped_bam_unsorted_file} -o {output.unmapped_bam_sorted_file};\
+                        samtools index -@ {threads} {output.unmapped_bam_sorted_file} -o {output.unmapped_bam_sorted_index};\
+                        rm -rf {params.unmapped_bam_unsorted_file};
+                        '''
+                    )
             rule starsolo_CB_UMI_Complex_all:
                 input:
                     expand(os.path.join(config["output"]["host"],"unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam"),sample=SAMPLES_ID_LIST),
@@ -827,13 +909,13 @@ if config["params"]["host"]["cellranger"]["do"]:
             cd ../../../;
             cp {params.cr_out}{params.SampleID}/outs/filtered_feature_bc_matrix/features.tsv.gz "{params.cr_out}{params.SampleID}/outs/features.tsv.gz";
             cp {params.cr_out}{params.SampleID}/outs/filtered_feature_bc_matrix/barcodes.tsv.gz "{params.cr_out}{params.SampleID}/outs/barcodes.tsv.gz"; 
-            cp {params.cr_out}{params.SampleID}/outs/filtered_feature_bc_matrix/matrix.mtx.gz ; "{params.cr_out}{params.SampleID}/outs/matrix.mtx.gz"; 
+            cp {params.cr_out}{params.SampleID}/outs/filtered_feature_bc_matrix/matrix.mtx.gz "{params.cr_out}{params.SampleID}/outs/matrix.mtx.gz"; 
             gunzip "{params.cr_out}{params.SampleID}/outs/matrix.mtx.gz"; 
             gunzip "{params.cr_out}{params.SampleID}/outs/features.tsv.gz";
             gunzip "{params.cr_out}{params.SampleID}/outs/barcodes.tsv.gz"; 
-            mv "{params.cr_out}{params.SampleID}/outs/features.tsv.gz" "{output.features_file}"; 
-            mv "{params.cr_out}{params.SampleID}/outs/matrix.mtx.gz" "{output.matrix_file}"; 
-            mv "{params.cr_out}{params.SampleID}/outs/barcodes.tsv.gz" "{output.barcodes_file}" ; 
+            mv "{params.cr_out}{params.SampleID}/outs/features.tsv" "{output.features_file}"; 
+            mv "{params.cr_out}{params.SampleID}/outs/matrix.mtx" "{output.matrix_file}"; 
+            mv "{params.cr_out}{params.SampleID}/outs/barcodes.tsv" "{output.barcodes_file}" ; 
             ln -sr "{params.cr_out}{params.SampleID}/outs/web_summary.html" "{output.web_summary}" ; 
             ln -sr "{params.cr_out}{params.SampleID}/outs/metrics_summary.csv" "{output.metrics_summary}";
             ln -sr "{params.cr_out}{params.SampleID}/outs/possorted_genome_bam.bam" "{output.mapped_bam_file}";
@@ -863,15 +945,33 @@ if config["params"]["host"]["cellranger"]["do"]:
             mem_mb=config["resources"]["samtools_extract"]["mem_mb"]
         threads:
             config["resources"]["samtools_extract"]["threads"]
-        conda:
-            config["envs"]["star"]
-        shell:
-            '''
-            samtools view --threads  {threads}  -b -f 4   {input.mapped_bam_file}  >  {params.unmapped_bam_unsorted_file};\
-            samtools sort -n  --threads  {threads} {params.unmapped_bam_unsorted_file} -o {output.unmapped_bam_sorted_file};\
-            samtools index -@  {threads} {output.unmapped_bam_sorted_file} -o {output.unmapped_bam_sorted_index};\
-            rm -rf {params.unmapped_bam_unsorted_file} 
-            '''
+        # conda:
+        #     config["envs"]["star"]
+        run:    
+            # Run the samtools view command
+            shell(
+                'samtools view --threads {threads} -b -f 4 {input.mapped_bam_file} > {params.unmapped_bam_unsorted_file}'
+            )
+
+            # Run samtools view to get the first 10 lines of the BAM file
+            result = subprocess.run(f'samtools view {params.unmapped_bam_unsorted_file} | head -n 10', shell=True, capture_output=True)
+
+            # Decode the bytes to a string
+            head_output_str = result.stdout.decode('utf-8')
+            # Count the number of lines in the head output
+            line_count = len(head_output_str.strip().split('\n'))
+
+            # Check if the line count is zero and raise an exception if true
+            if line_count == 0:
+                    raise ValueError(f"Error: The unmapped BAM unsorted file for sample {wildcards.sample} is empty. Please check your data.")
+            # Continue with the remaining shell commands
+            shell(
+                '''
+                samtools sort -n --threads {threads} {params.unmapped_bam_unsorted_file} -o {output.unmapped_bam_sorted_file};\
+                samtools index -@ {threads} {output.unmapped_bam_sorted_file} -o {output.unmapped_bam_sorted_index};\
+                rm -rf {params.unmapped_bam_unsorted_file};
+                '''
+            )
 
     rule cellranger_all:
         input:
