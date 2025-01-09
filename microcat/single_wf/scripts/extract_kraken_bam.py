@@ -5,7 +5,7 @@ import os
 import sys
 import pysam 
 import logging
-
+import gzip
 # Create a logger object
 logger = logging.getLogger('my_logger')
 
@@ -212,7 +212,6 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--krak_output_file", action="store", help="path to kraken output file")
     parser.add_argument("--kraken_report",dest="krak_report_file",action="store", help="path to kraken report")
-    parser.add_argument("--extract_krak_file", action="store", help="extract filename path")
     parser.add_argument('--ktaxonomy', required=True,
         help='Kraken2 database ktaxonomy file path')
     parser.add_argument("--keep_original", action="store", default=True, help="delete original bam file? T/F")
@@ -220,6 +219,9 @@ def main():
         dest='input_bam_file', help='Input origin bam file for denosing')
     parser.add_argument('--extracted_bam_file', required=True,
         dest='extracted_bam_file', help='Input origin bam file for denosing')
+    parser.add_argument('--whitelist',help='Path to the whitelist file')
+    parser.add_argument('--barcode_tag', required=True, help='The tag used to store the barcode information')
+    parser.add_argument('--extracted_output_file', required=True, help='Path to the extracted output file')
     parser.add_argument('--log_file', dest='log_file', 
         required=True, default='logfile_download_genomes.txt',
         help="File to write the log to")
@@ -271,22 +273,84 @@ def main():
 
     # 将Kraken的DataFrame的query_name列转换为一个集合
     kraken_output_query_names = set(krak2_output_filtered["query_name"])
+    logger.info('Getting the barcode whitlist', status='complete')
+    whitelist_set = set()
+    if args.whitelist is None:
+        logger.info('No whitelist file provided. All reads will be extracted', status='run')
+    else:
+        # Detect whilelist file is gzipped or not
+        if args.whitelist.endswith('.gz'):
+            # Read the whitelist file and store the data in a set
+            try:
+                white_list = gzip.open(args.whitelist, 'rt')
+                for each_line in white_list:
+                    each_line = each_line.rstrip('\n')
+                    whitelist_set.add(each_line)
+                white_list.close()
+            except Exception as e:
+                logger.error(f"Error reading whitelist file: {e}")
+                sys.exit(1)
+        else:
+            # Read the whitelist file and store the data in a set
+            try:
+                white_list = open(args.whitelist, 'r')
+                for each_line in white_list:
+                    each_line = each_line.rstrip('\n')
+                    whitelist_set.add(each_line)
+                white_list.close()
+            except Exception as e:
+                logger.error(f"Error reading whitelist file: {e}")
+                sys.exit(1)
 
     logger.info(f'Extract classified reads from bam file', status='run')
     read_count = 0
     krak_count = 0
-    # 打开源BAM文件和目标BAM文件
-    with pysam.AlignmentFile(args.input_bam_file, "rb") as source_bam, \
-        pysam.AlignmentFile(args.extracted_bam_file, "wb", header=source_bam.header) as output_bam:
-        
-        # 遍历源BAM文件的每一个read
-        for sread in source_bam:
-            read_count += 1
-            if sread.query_name in kraken_output_query_names:
-                # 如果query name匹配Kraken的输出，将read写入目标BAM文件
-                output_bam.write(sread)
-                krak_count += 1
-    # 日志记录分类的reads提取完成
+    valid_query_name = set()
+    if args.whitelist is None:
+        with pysam.AlignmentFile(args.input_bam_file, "rb") as source_bam, \
+            pysam.AlignmentFile(args.extracted_bam_file, "wb", header=source_bam.header) as output_bam:
+            
+            # 遍历源BAM文件的每一个read
+            for sread in source_bam:
+                read_count += 1
+                if sread.query_name in kraken_output_query_names:
+                    # when the read has a barcode in the whitelist and is classified as bacteria, virus, archaea or fungi by Kraken, write the read to the target BAM file
+                    output_bam.write(sread)
+                    valid_query_name.add(sread.query_name)
+                    krak_count += 1
+    else:        
+        # Open the source BAM file and the target BAM file
+        with pysam.AlignmentFile(args.input_bam_file, "rb") as source_bam, \
+            pysam.AlignmentFile(args.extracted_bam_file, "wb", header=source_bam.header) as output_bam:
+            
+            # Iterate over each read in the source BAM file
+            for sread in source_bam:
+                read_count += 1
+                try:
+                    sread_CB = sread.get_tag(args.barcode_tag)
+                except Exception as e:
+                    # Some reads don't have a cell barcode or transcript barcode; they can be skipped.
+                    continue
+                if sread_CB in whitelist_set and sread.query_name in kraken_output_query_names:
+                    # when the read has a barcode in the whitelist and is classified as bacteria, virus, archaea or fungi by Kraken, write the read to the target BAM file
+                    output_bam.write(sread)
+                    valid_query_name.add(sread.query_name)
+                    krak_count += 1
+
+    # Save the classified reads info to a new file
+    with open(args.krak_output_file, 'r') as kfile , \
+        open(args.extracted_output_file, 'w') as efile:
+        for kraken_line in kfile:
+            try:
+                read_type,query_name, taxid_info, read_len, kmer_position = kraken_line.strip().split('\t')
+            except (ValueError, KeyError) as e:
+                # in this case, something is wrong!
+                logger.error(f"Here is an error. Queryname: {query_name}")
+                continue
+            if query_name in valid_query_name:
+                efile.write(kraken_line)
+
+    # Logger info
     logger.info(f'Extract classified reads from bam file', status='complete')
     logger.info(f'Total unmapped reads: {read_count}', status='summary')
     logger.info(f'Total unmapped reads classified as bactreia, virus ,archaea and fungi by Kraken: {krak_count}', status='summary')
