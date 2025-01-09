@@ -235,7 +235,7 @@ def init():
               prompt='Select what host process software you use')
 @click.option('--chemistry', type=click.Choice(['smartseq', 'smartseq2', 'tenx_3pv1', 'tenx_3pv2',
                                                 'tenx_3pv3', 'seqwell', 'tenx_auto', 'dropseq',
-                                                'tenx_multiome', 'tenx_5ppe', 'seqwell', 'indrop_v1','indrop_v2','celseq2']),
+                                                'tenx_multiome', 'tenx_5ppe', 'seqwell', 'indrop_v1','indrop_v2','celseq2','cb_umi_simple','cb_umi_complex']),
               default="tenx_auto",
               show_default=True,
               help='Sequencing chemistry option, required when host is starsolo',
@@ -247,6 +247,14 @@ def init():
               show_choices=True,
               type=click.Choice(['kraken2uniq', 'krakenuniq', 'pathseq', 'metaphlan'], case_sensitive=False),
               prompt='Select classifier software you use')
+@click.option('--align',
+              default='bwa2',
+              help='Which align used',
+              show_choices=True,
+              type=click.Choice(['bowtie2',"bwa","minimap2","bwa2"], case_sensitive=False),
+              prompt='Select classifier software you use')
+@click.option('--cellbender',help='Use CellBender for single-cell environment RNA filtering', is_flag=True, default=False)
+@click.option('--gpu',help='Use GPU for CellBender acceleration (enabled only if --cellbender is true)', is_flag=True, default=False)
 @click.option("-s", "--samples",
               type=click.Path(exists=True),
               prompt='Give sample tsv path',
@@ -258,13 +266,24 @@ def init():
     type=str,
     default="./",
     help="Project workdir")
+@click.option(
+    "-p",
+    "--project_name",
+    metavar="PROJECT_NAME",
+    type=str,
+    default=os.path.basename(os.getcwd()),
+    help="Project name")
 def single_init(
     begin,
     workdir,
     host,
     chemistry,
     classifier,
-    samples):
+    samples,
+    cellbender,
+    align,
+    project_name,
+    gpu):
     """
     Single-cell RNA-seq microbiome mining pipeline init.\n
 
@@ -308,6 +327,8 @@ def single_init(
         with open(os.path.join(os.path.join(os.path.dirname(__file__),"chemistry_defs.json"))) as file:
             CHEMISTRY_DEFS = json.load(file)
 
+        conf["params"]["project"] = project_name
+        
         # conf["params"]["simulate"]["do"] = False
         conf["params"]["begin"] = begin
         for hoster_ in ["starsolo","cellranger"]:
@@ -317,20 +338,20 @@ def single_init(
                     if chemistry in CHEMISTRY_DEFS:
                         chem_params = CHEMISTRY_DEFS[chemistry]
 
-                        # 更新host.starsolo.barcode下的参数
+                        # update host.starsolo.barcode params
                         barcode_params = chem_params.get("barcode")
 
                         if barcode_params:
                             for key, value in barcode_params[0].items():
                                 conf["params"]["host"]["starsolo"]["barcode"][key] = value
 
-                        # 更新host.starsolo.algorithm下的参数
+                        # update host.starsolo.algorithm params
                         algorithm_params = chem_params.get("algorithm")
                         if algorithm_params:
                             for key, value in algorithm_params[0].items():
                                 conf["params"]["host"]["starsolo"]["algorithm"][key] = value
 
-                        # 更新host.starsolo下的其他参数
+                        # update host.starsolo other params
                         for key, value in chem_params.items():
                             if key not in ["barcode", "algorithm"]:
                                 conf["params"]["host"]["starsolo"][key] = value
@@ -342,6 +363,29 @@ def single_init(
                 conf["params"]["classifier"][classifier_]["do"] = True
             else:
                 conf["params"]["classifier"][classifier_]["do"] = False
+
+        for align_ in ["bwa","bwa2","bowtie2","minimap2"]:
+            if align_ == align:
+                conf["params"]["align"][align_]["do"] = True
+            else:
+                conf["params"]["align"][align_]["do"] = False
+            if conf["params"]["align"][align_]["db"] != "":
+                pass
+            else:
+                conf["params"]["align"][align_]["db"] = os.path.join(os.path.realpath(workdir), f"database/{align_}")
+
+        if conf["params"]["align"]["download_dir"] != "":
+                pass
+        else:
+            conf["params"]["align"]["download_dir"] = os.path.join(os.path.realpath(workdir), f"database/")
+
+        for env_name in conf["envs"]:
+            conf["envs"][env_name] = os.path.join(os.path.realpath(workdir), f"envs/{env_name}.yaml")
+
+        if cellbender:
+            conf["params"]["host"]["cellbender"]["do"] = True
+            if gpu:
+                conf["params"]["host"]["cellbender"]["gpu"] = True
 
         # Add the user-supplied samples table to the configuration
         if samples:
@@ -449,20 +493,20 @@ def bulk_init(
                     if chemistry in CHEMISTRY_DEFS:
                         chem_params = CHEMISTRY_DEFS[chemistry]
 
-                        # 更新host.starsolo.barcode下的参数
+                        # update host.starsolo.barcode params
                         barcode_params = chem_params.get("barcode")
 
                         if barcode_params:
                             for key, value in barcode_params[0].items():
                                 conf["params"]["host"]["starsolo"]["barcode"][key] = value
 
-                        # 更新host.starsolo.algorithm下的参数
+                        # update host.starsolo.algorithm params
                         algorithm_params = chem_params.get("algorithm")
                         if algorithm_params:
                             for key, value in algorithm_params[0].items():
                                 conf["params"]["host"]["starsolo"]["algorithm"][key] = value
 
-                        # 更新host.starsolo下的其他参数
+                        # update host.starsolo other params
                         for key, value in chem_params.items():
                             if key not in ["barcode", "algorithm"]:
                                 conf["params"]["host"]["starsolo"][key] = value
@@ -566,6 +610,137 @@ def multi_init(hash_type,host,chemistry,classifier,samples):
     click.echo('Initialized the database')
 
 
+@init.command("sims")
+@click.option('--begin',
+              type=click.Choice(['simulate','trimming','host','classifier','denosing'], case_sensitive=False),
+              default='trimming', 
+              show_default=True,
+              help='Pipeline starting point', 
+              show_choices=True,
+              prompt='Your name please')
+@click.option('--host',
+              default='starsolo',
+              show_default=True,
+              help='Which hoster used',
+              show_choices=True,
+              type=click.Choice(['starsolo', 'cellranger'], case_sensitive=False),
+              prompt='Select what host you use')
+@click.option('--chemistry', type=click.Choice(['smartseq', 'smartseq2', 'tenx_3pv1', 'tenx_3pv2',
+                                                'tenx_3pv3', 'seqwell', 'tenx_auto', 'dropseq',
+                                                'tenx_multiome', 'tenx_5ppe', 'seqwell','indrop_v1','celseq2']),
+              default=None, help='Sequencing chemistry option, required when host is starsolo')
+@click.option('--classifier',
+              default='pathseq',
+              show_default=True,
+              help='Which classifier used',
+              show_choices=True,
+              type=click.Choice(['kraken2uniq', 'krakenuniq', 'pathseq', 'metaphlan'], case_sensitive=False))
+@click.option("-s", "--samples",
+              type=click.Path(exists=True),
+              prompt='Select what host you use',
+              help="Samples list, tsv format required.")
+@click.option(
+    "-d",
+    "--workdir",
+    metavar="WORKDIR",
+    type=str,
+    default="./",
+    help="Project workdir")
+def sims_init(
+    workdir,
+    begin,
+    host,
+    chemistry,
+    classifier,
+    samples):
+    """
+    Simulation
+    """
+    if workdir:
+    # Create a MicrocatConfig object using the provided working directory
+        project = MicrocatConfig(workdir,config_type="bulk")
+    
+        # Check if the working directory already exists
+        if os.path.exists(workdir):
+            print(f"WARNING: The working directory '{workdir}' already exists.")
+            proceed = input("Do you want to proceed? (y/n): ").lower()
+            if proceed != 'y':
+                print("Aborted.")
+                sys.exit(1)
+
+        # Print the project structure and create the necessary subdirectories
+        print(project.__str__())
+        project.create_dirs()
+
+        # Get the default configuration
+        conf = project.get_config()
+
+        # Update environment configuration file paths
+        for env_name in conf["envs"]:
+            conf["envs"][env_name] = os.path.join(os.path.realpath(workdir), f"envs/{env_name}.yaml")
+
+
+        for script_path in conf["scripts"]:
+            origin_path = conf["scripts"][script_path]
+            conf["scripts"][script_path] = os.path.join(os.path.dirname(__file__),f"{origin_path}")
+
+        # Get the single cell chemistry defination
+        with open(os.path.join(os.path.join(os.path.dirname(__file__),"chemistry_defs.json"))) as file:
+            CHEMISTRY_DEFS = json.load(file)
+
+        conf["params"]["simulate"]["do"] = False
+        conf["params"]["begin"] = begin
+        for hoster_ in ["starsolo","cellranger"]:
+            if hoster_ == host:
+                conf["params"]["host"][hoster_]["do"] = True
+                if hoster_ == "starsolo":
+                    if chemistry in CHEMISTRY_DEFS:
+                        chem_params = CHEMISTRY_DEFS[chemistry]
+
+                        # update host.starsolo.barcode params
+                        barcode_params = chem_params.get("barcode")
+
+                        if barcode_params:
+                            for key, value in barcode_params[0].items():
+                                conf["params"]["host"]["starsolo"]["barcode"][key] = value
+
+                        # update host.starsolo.algorithm params
+                        algorithm_params = chem_params.get("algorithm")
+                        if algorithm_params:
+                            for key, value in algorithm_params[0].items():
+                                conf["params"]["host"]["starsolo"]["algorithm"][key] = value
+
+                        # update host.starsolo other params
+                        for key, value in chem_params.items():
+                            if key not in ["barcode", "algorithm"]:
+                                conf["params"]["host"]["starsolo"][key] = value
+            else:
+                conf["params"]["host"][hoster_]["do"] = False
+
+        for classifier_ in ["kraken2uniq","krakenuniq","pathseq","metaphlan"]:
+            if classifier_ in classifier:
+                conf["params"]["classifier"][classifier_]["do"] = True
+            else:
+                conf["params"]["classifier"][classifier_]["do"] = False
+
+        # Add the user-supplied samples table to the configuration
+        if samples:
+            conf["params"]["samples"] = os.path.abspath(samples)
+        else:
+            click.secho("ERROR:Please supply samples table!",fg='red')
+            sys.exit(-1)
+
+        # Update the configuration file
+        update_config(
+            project.config_file, project.new_config_file, conf, remove=False
+        )
+
+        click.secho("NOTE: Congfig.yaml reset to default values.", fg='green')
+
+    else:
+        # If the user didn't provide a working directory, print an error message and exit
+        click.secho("ERROR:Please supply a workdir!",fg='red')
+        sys.exit(-1)
 
 # ##############################################################################
 # Config module
@@ -589,6 +764,9 @@ def multi_init(hash_type,host,chemistry,classifier,samples):
 @click.option("--pathseq_ref",
               type=click.Path(exists=True),
               help="Samples list, tsv format required.")
+@click.option("--download_dir",
+              type=click.Path(exists=True),
+              help="Download path for aligning microbiome data")
 @click.option("--metaphlan4_ref",
               type=click.Path(exists=True),
               help="Samples list, tsv format required.")
@@ -610,6 +788,7 @@ def config(
     metaphlan4_ref,
     cellranger_ref,
     generic_profile,
+    download_dir,
     edit):
     """
     Quickly adjust microcat's default configurations
@@ -683,7 +862,12 @@ def config(
         # update_config(bulk_config_file, bulk_config_file, bulk_config)
 
         click.echo(f"Krake2nuniq Refernce location updated as '{krak2_ref}' path.")
+    if download_dir is not None and not edited:
+        single_config = parse_yaml(single_config_file)
+        single_config["params"]["align"]["download_dir"] = download_dir
+        update_config(single_config_file, single_config_file, single_config)
 
+        click.echo(f"Download Directory updated as '{download_dir}' path.")
     if krakuniq_ref is not None and not edited:
         # Spatial and single both have starsolo refernence 
         single_config = parse_yaml(single_config_file)
@@ -914,6 +1098,7 @@ def run_local(
 
     # Add specific flags to the command based on the input arguments
     if "--touch" in unknown:
+        cmd += ["--cores 1"]
         pass
     elif conda_create_envs_only:
         cmd += ["--use-conda",
