@@ -415,12 +415,15 @@ features_file="${sample}_features.tsv"
 matrix_file="${sample}_matrix.mtx"
 barcodes_file="${sample}_barcodes.tsv"
 mapped_bam_file="Aligned_sortedByCoord_out.bam"
-cp "Solo.out/Gene/raw/features.tsv" "$features_file" ;
-cp "Solo.out/Gene/raw/matrix.mtx" "$matrix_file" ; 
-cp "Solo.out/Gene/raw/barcodes.tsv" "$barcodes_file" ;\
+cp "Solo.out/Gene/filtered/features.tsv" "$features_file" ;
+cp "Solo.out/Gene/filtered/matrix.mtx" "$matrix_file" ; 
+cp "Solo.out/Gene/filtered/barcodes.tsv" "$barcodes_file" ;\
 gzip "Solo.out/Gene/raw/features.tsv";\
 gzip "Solo.out/Gene/raw/matrix.mtx";\
 gzip "Solo.out/Gene/raw/barcodes.tsv";\
+gzip "Solo.out/Gene/filtered/features.tsv";\
+gzip "Solo.out/Gene/filtered/matrix.mtx";\
+gzip "Solo.out/Gene/filtered/barcodes.tsv";\
 mv "Aligned.sortedByCoord.out.bam" "$mapped_bam_file";\
 
 
