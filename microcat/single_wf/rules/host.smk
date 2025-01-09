@@ -62,6 +62,8 @@ if config["params"]["host"]["starsolo"]["do"]:
                             mkdir -p {params.starsolo_out}; 
                             cd {params.starsolo_out} ;
                             
+                            mem_bytes=$(expr {resources.mem_mb} \* 1048576)\
+
                             bash {params.starsolo_10X_auto} \
                             --barcode_reads {params.barcode_reads} \
                             --cdna_reads {params.cdna_reads} \
@@ -74,6 +76,7 @@ if config["params"]["host"]["starsolo"]["do"]:
                             --soloUMIfiltering {params.soloUMIfiltering} \
                             --soloCellFilter {params.soloCellFilter} \
                             --outFilterScoreMin {params.outFilterScoreMin} \
+                            --mem_bytes $mem_bytes \
                             --soloMultiMappers {params.soloMultiMappers} \
                             --clipAdapterType {params.clipAdapterType}\
                             --variousParams '{params.variousParams}'\
@@ -136,6 +139,8 @@ if config["params"]["host"]["starsolo"]["do"]:
                             mkdir -p {params.starsolo_out}; 
                             cd {params.starsolo_out} ;
                             
+                            mem_bytes=$(expr {resources.mem_mb} \* 1048576)\
+
                             bash {params.starsolo_10X_auto} \
                             --barcode_reads {params.barcode_reads} \
                             --cdna_reads {params.cdna_reads} \
@@ -150,6 +155,7 @@ if config["params"]["host"]["starsolo"]["do"]:
                             --outFilterScoreMin {params.outFilterScoreMin} \
                             --soloMultiMappers {params.soloMultiMappers} \
                             --clipAdapterType {params.clipAdapterType}\
+                            --mem_bytes $mem_bytes \
                             2>&1 | tee ../../../{log} ;
                         '''
         else:
@@ -224,6 +230,9 @@ if config["params"]["host"]["starsolo"]["do"]:
                     else
                         file_command=''
                     fi
+                    
+                    # 将资源参数 mem_mb 转换为字节
+                    mem_bytes=$(expr {resources.mem_mb} \* 1048576);
 
                     mkdir -p {params.starsolo_out}; 
                     cd {params.starsolo_out} ;
@@ -237,18 +246,28 @@ if config["params"]["host"]["starsolo"]["do"]:
                     --runThreadN {threads} \
                     --clipAdapterType {params.clipAdapterType} --outFilterScoreMin {params.outFilterScoreMin} --soloCBmatchWLtype {params.soloCBmatchWLtype} \
                     --soloUMIfiltering {params.soloUMIfiltering} --soloUMIdedup {params.soloUMIdedup} \
-                    --outSAMtype {params.outSAMtype}\
+                    --soloCellFilter {params.soloCellFilter} \
+                    --outSAMtype {params.outSAMtype} \
+                    --outMultimapperOrder Random \
                     --outSAMattrRGline ID:{wildcards.sample} SM:{wildcards.sample} LB:{params.chemistry} \
                     --outSAMattributes {params.outSAMattributes} \
+                    --limitBAMsortRAM $mem_bytes \
+                    --outBAMsortingBinsN 300 \
                     --outSAMunmapped Within \
                     --outFileNamePrefix ./{wildcards.sample}/\
                     {params.variousParams} \
                     2>&1 | tee ../../../{log} ;
                     pwd ;\
                     cd ../../../;\
-                    ln -sr "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/filtered/features.tsv" "{output.features_file}" ;
-                    ln -sr "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/filtered/matrix.mtx" "{output.matrix_file}" ; 
-                    ln -sr "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/filtered/barcodes.tsv" "{output.barcodes_file}" ;\
+                    cp "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/filtered/features.tsv" "{output.features_file}" ;
+                    cp "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/filtered/matrix.mtx" "{output.matrix_file}" ; 
+                    cp "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/filtered/barcodes.tsv" "{output.barcodes_file}" ;\
+                    gzip "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/filtered/features.tsv" ;\
+                    gzip "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/filtered/matrix.mtx" ;\
+                    gzip "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/filtered/barcodes.tsv";\
+                    gzip "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/raw/features.tsv" ;\
+                    gzip "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/raw/matrix.mtx" ;\
+                    gzip "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/raw/barcodes.tsv";\
                     mv "{params.starsolo_out}/{wildcards.sample}/Aligned.sortedByCoord.out.bam" "{output.mapped_bam_file}";
                     '''
         rule starsolo_CB_UMI_Simple_unmapped_extracted_sorted:
@@ -550,119 +569,6 @@ if config["params"]["host"]["starsolo"]["do"]:
                 
                 rm -rf {params.unmapped_bam_unsorted_file}
                 '''
-        # rule starsolo_smartseq_extracted_sorted:
-        #     input:
-        #         mapped_bam_file = os.path.join(
-        #             config["output"]["host"],
-        #             "starsolo_count/{sample}/Aligned_out.bam")
-        #     output:
-        #         unmapped_sorted_bam_file = os.path.join(
-        #             config["output"]["host"],
-        #             "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam"),
-        #         unmapped_bam_sorted_index = os.path.join(
-        #                 config["output"]["host"],
-        #                 "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bai")
-        #     params:
-        #         unmapped_bam_unsorted_file = temp(os.path.join(
-        #             config["output"]["host"],
-        #             "unmapped_host/{sample}/Aligned_out_unmapped.bam"))
-        #     log:
-        #         os.path.join(config["logs"]["host"],
-        #                     "starsolo/{sample}/unmapped_sorted_bam.log")
-        #     benchmark:
-        #         os.path.join(config["benchmarks"]["host"],
-        #                     "starsolo/{sample}/unmapped_sorted_bam.benchmark")
-        #     threads:
-        #         config["resources"]["samtools_extract"]["threads"]
-        #     conda:
-        #         config["envs"]["star"]
-        #     resources:
-        #         mem_mb=config["resources"]["samtools_extract"]["mem_mb"],
-        #     shell:
-        #         '''
-        #         samtools view --threads  {threads}  -b -f 4   {input.mapped_bam_file}  >  {params.unmapped_bam_unsorted_file};\
-        #         samtools sort -n  --threads  {threads} {params.unmapped_bam_unsorted_file} -o {output.unmapped_sorted_bam_file};\
-        #         samtools index -@  {threads} {output.unmapped_sorted_bam_file} -o {output.unmapped_bam_sorted_index};\
-        #         rm -rf {params.unmapped_bam_unsorted_file}
-        #         '''
-
-        # rule starsolo_smartseq_unmapped_sorted_bam:
-        #     input:
-        #         unmapped_bam_unsorted_file = os.path.join(
-        #             config["output"]["host"],
-        #             "unmapped_host/{sample}/Aligned_out_unmapped.bam")
-        #     output:
-        #         unmapped_sorted_bam_file = os.path.join(
-        #             config["output"]["host"],
-        #             "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam"),
-        #         unmapped_bam_sorted_index = os.path.join(
-        #                 config["output"]["host"],
-        #                 "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bai")
-        #     params:
-        #         tag="RG"
-        #     log:
-        #         os.path.join(config["logs"]["host"],
-        #                     "starsolo/{sample}/unmapped_sorted_bam.log")
-        #     benchmark:
-        #         os.path.join(config["benchmarks"]["host"],
-        #                     "starsolo/{sample}/unmapped_sorted_bam.benchmark")
-        #     threads:
-        #         config["resources"]["samtools_extract"]["threads"]
-        #     resources:
-        #         mem_mb=config["resources"]["samtools_extract"]["mem_mb"],
-        #     conda:
-        #         config["envs"]["star"]
-        #     shell:
-        #         '''
-        #         samtools sort -n  --threads  {threads} {input.unmapped_bam_unsorted_file} -o {output.unmapped_sorted_bam_file};\
-        #         samtools index -@  {threads} {output.unmapped_sorted_bam_file} -o {output.unmapped_bam_sorted_index};\
-        #         '''
-        # checkpoint starsolo_smartseq_demultiplex_bam_by_read_group:
-        #     input:
-        #         unmapped_sorted_bam = os.path.join(
-        #             config["output"]["host"],
-        #             "starsolo_count/Aligned_out_unmapped_RGsorted.bam")
-        #     output:
-        #         unmapped_bam_demultiplex_dir = directory(os.path.join(
-        #             config["output"]["host"],
-        #             "unmapped_host/"))
-        #     params:
-        #         threads = 40, # Number of threads
-        #         tag="RG"
-        #     conda:
-        #         config["envs"]["star"]
-        #     log:
-        #         os.path.join(
-        #             config["logs"]["host"],
-        #             "starsolo_count/demultiplex_bam_by_read_group.log")
-        #     benchmark:
-        #         os.path.join(
-        #             config["benchmarks"]["host"], 
-        #             "starsolo_count/demultiplex_bam_by_read_group.benchmark")
-        #     shell:
-        #         """
-        #         python /data/project/host-microbiome/microcat/microcat/scripts/spilt_bam_by_tag.py --tag {params.tag} --bam_path {input.unmapped_sorted_bam} --output_dir {output.unmapped_bam_demultiplex_dir}  --log_file {log}
-        #         """
-        # split the PathSeq BAM into one BAM per cell barcode
-        # rule split_starsolo_BAM_by_RG:
-        #     input:
-        #         unmapped_sorted_bam = os.path.join(
-        #                 config["output"]["host"],
-        #                 "starsolo_count/Aligned_out_unmapped_RGsorted.bam")
-        #     output:
-        #         unmapped_bam_sorted_file =os.path.join(
-        #             config["output"]["host"],
-        #             "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam")
-        #     params:
-        #         SampleID="{sample}",
-        #     shell:
-        #         '''
-        #         python /data/project/host-microbiome/microcat/microcat/scripts/split_Starsolo_BAM_by_RG.py \
-        #         --bam_path {input.unmapped_sorted_bam} \
-        #         --tag {params.SampleID} \
-        #         --output_bam {output.unmapped_bam_sorted_file} 
-        #         '''
-
         rule starsolo_SmartSeq_all:
             input:
                 expand(os.path.join(
@@ -781,6 +687,9 @@ if config["params"]["host"]["starsolo"]["do"]:
                     ln -sr "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/raw/features.tsv" "{output.features_file}" ;\
                     ln -sr "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/raw/matrix.mtx" "{output.matrix_file}" ; \
                     ln -sr "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/raw/barcodes.tsv" "{output.barcodes_file}" ;\
+                    gzip "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/raw/features.tsv" ;\
+                    gzip "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/raw/matrix.mtx" ;\
+                    gzip "{params.starsolo_out}/{wildcards.sample}/Solo.out/Gene/raw/barcodes.tsv";\
                     mv "{params.starsolo_out}/{wildcards.sample}/Aligned.sortedByCoord.out.bam" "{output.mapped_bam_file}";
                     '''
             rule starsolo_CB_UMI_Complex_unmapped_extracted_sorted:
@@ -841,12 +750,19 @@ else:
 if config["params"]["host"]["cellranger"]["do"]:
 # expected input format for FASTQ file
 # cellranger call to process the raw samples
+    rule raw_prepare_reads:
+        input:
+            config["params"]["samples"],
+        output:
+            os.path.join(config["output"]["raw"], "reads/{sample}/{sample}_summary.json")
+        script:
+            "../scripts/preprocess_raw.py"
     rule cellranger_count:
         input:
             # fastqs_dir = config["params"]["data_dir"],
             # r1 = lambda wildcards: get_sample_id(SAMPLES, wildcards, "fq1"),
             # r2 = lambda wildcards: get_sample_id(SAMPLES, wildcards, "fq2")
-            fastqs_dir=lambda wildcards: microcat.get_fastqs_dir(SAMPLES,wildcards),
+            sample_summary = os.path.join(config["output"]["raw"], "reads/{sample}/{sample}_summary.json"),
         output:
             features_file = os.path.join(
                 config["output"]["host"],
@@ -875,6 +791,7 @@ if config["params"]["host"]["cellranger"]["do"]:
                 config["output"]["host"],
                 "cellranger_count/"),
             reference = config["params"]["host"]["cellranger"]["reference"],
+            fastqs_dir = os.path.abspath(os.path.join(config["output"]["raw"], "reads/{sample}/")),
             # local_cores = config["params"]["host"]["cellranger"]["local_cores"],
             SampleID="{sample}",
             variousParams = config["params"]["host"]["cellranger"]["variousParams"],
@@ -903,17 +820,20 @@ if config["params"]["host"]["cellranger"]["do"]:
             --sample={params.SampleID}  \
             --transcriptome={params.reference} \
             --localcores={threads} \
-            --fastqs={input.fastqs_dir} \
+            --fastqs={params.fastqs_dir} \
             --nosecondary \
             {params.variousParams} \
             2>&1 | tee ../../../{log} ;  
             cd ../../../;
-            gunzip {params.cr_out}{params.SampleID}/outs/filtered_feature_bc_matrix/features.tsv.gz ; 
-            gunzip {params.cr_out}{params.SampleID}/outs/filtered_feature_bc_matrix/barcodes.tsv.gz ; 
-            gunzip {params.cr_out}{params.SampleID}/outs/filtered_feature_bc_matrix/matrix.mtx.gz ; 
-            ln -sr "{params.cr_out}{params.SampleID}/outs/filtered_feature_bc_matrix/features.tsv" "{output.features_file}"; 
-            ln -sr "{params.cr_out}{params.SampleID}/outs/filtered_feature_bc_matrix/matrix.mtx" "{output.matrix_file}"; 
-            ln -sr "{params.cr_out}{params.SampleID}/outs/filtered_feature_bc_matrix/barcodes.tsv" "{output.barcodes_file}" ; 
+            cp {params.cr_out}{params.SampleID}/outs/filtered_feature_bc_matrix/features.tsv.gz "{params.cr_out}{params.SampleID}/outs/features.tsv.gz";
+            cp {params.cr_out}{params.SampleID}/outs/filtered_feature_bc_matrix/barcodes.tsv.gz "{params.cr_out}{params.SampleID}/outs/barcodes.tsv.gz"; 
+            cp {params.cr_out}{params.SampleID}/outs/filtered_feature_bc_matrix/matrix.mtx.gz ; "{params.cr_out}{params.SampleID}/outs/matrix.mtx.gz"; 
+            gunzip "{params.cr_out}{params.SampleID}/outs/matrix.mtx.gz"; 
+            gunzip "{params.cr_out}{params.SampleID}/outs/features.tsv.gz";
+            gunzip "{params.cr_out}{params.SampleID}/outs/barcodes.tsv.gz"; 
+            mv "{params.cr_out}{params.SampleID}/outs/features.tsv.gz" "{output.features_file}"; 
+            mv "{params.cr_out}{params.SampleID}/outs/matrix.mtx.gz" "{output.matrix_file}"; 
+            mv "{params.cr_out}{params.SampleID}/outs/barcodes.tsv.gz" "{output.barcodes_file}" ; 
             ln -sr "{params.cr_out}{params.SampleID}/outs/web_summary.html" "{output.web_summary}" ; 
             ln -sr "{params.cr_out}{params.SampleID}/outs/metrics_summary.csv" "{output.metrics_summary}";
             ln -sr "{params.cr_out}{params.SampleID}/outs/possorted_genome_bam.bam" "{output.mapped_bam_file}";

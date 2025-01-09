@@ -41,7 +41,11 @@ params:
       soloAdapterSequence      : ""
       soloStrand               :
       variousParams            : "" # Other STARsolo parameters
-
+    cellbender:
+      do: true
+      fpr: 0.01
+      gpu: "off"
+      variousParams: ''             # Other pathseq parameters
   ## Taxonomic classification parameters  
   classifier:
     kraken2uniq:
@@ -72,8 +76,8 @@ params:
     krak_sample_denosing:
       min_frac                 : 0.5
       kmer_len                 : 35
-      min_dust                 : 0.08
-      min_entropy              : 1.5
+      min_dust                 : 0.05
+      min_entropy              : 1.2
     krak_study_denosing:
       min_reads                : 2
       min_uniq                 : 2
@@ -105,6 +109,9 @@ resources:
   pathseq:
     threads                    : 24        # Number of threads for pathseq  
     mem_mb                     : 200000     # Memory in MB for pathseq
+  cellbender:
+    threads                    : 20
+    mem_mb                     : 20000     # Memory in MB for krak_sample_denosing
   extract_kraken2_classified_output:
     threads                    : 8
     mem_mb                     : 4000     # Memory in MB for   
@@ -125,6 +132,7 @@ output:
   trimming                     : results/01.trimming    # Output folder for trimmed reads
   host                         : results/02.host            # Output folder for host alignment
   classifier                   : results/03.classifier # Output folder for taxonomy classification
+  profile                      : results/04.profile  # Output folder for profile
 
 #######################################################################################  
 # Log directory settings
@@ -132,18 +140,19 @@ logs:
   prepare                      : "logs/00.prepare"       # Log folder for data preparation
   host                         : "logs/02.host"             # Log folder for host alignment
   classifier                   : "logs/03.classifier" # Log folder for taxonomy classification
+  profile                      : logs/04.profile      # Output folder for taxonomy classification
 
 #######################################################################################
 # Benchmark directory settings  
 benchmarks:
   host                         : "benchmarks/02.host"       # Benchmark folder for host alignment
   classifier                   : "benchmarks/03.classifier" # Benchmark folder for taxonomy classification
-
+  profile                      : "benchmarks/04.profile" # Benchmark folder for taxonomy 
 #######################################################################################
 # Data directory settings
 datas:
   barcode_list_dirs:
-    tenX                       : "/data/project/host-microbiome/microcat/microcat/single_wf/data/" # Directory containing 10x barcodes
+    tenX                       : "/data/project/host-microbiome/MicroCAT/microcat/single_wf/data/" # Directory containing 10x barcodes
 
 #######################################################################################
 # Conda environment settings
@@ -173,3 +182,5 @@ scripts:
   starsolo_10X_auto            : scripts/starsolo_tenX_auto.sh # Wrapper script for STARsolo 10x pipeline
   bam2fastq                    : scripts/paired_bam_to_fastq_script.sh # Wrapper script for bam convert to fastq
   kraken2sc_rg                 : scripts/kraken2sc_rg.py # Convert kraken2 output to silvacompatible format
+  leiden_pre_cluster           : scripts/leidan_cellbender_clsuter.py # Convert kraken2 output to silvacompatible 
+  ledian_cluster_noncellbender : scripts/create_hdf5.py

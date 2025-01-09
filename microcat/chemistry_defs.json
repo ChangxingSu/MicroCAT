@@ -598,6 +598,7 @@
     "description": "Seq-well",
     "soloType": "CB_UMI_Simple",
     "soloStrand": "Forward",
+    "outSAMtype": "BAM SortedByCoordinate",
     "outSAMattributes": "NH HI AS nM CB UB CR CY UR UY GX GN",
     "name": "Seq-well",
     "algorithm": [

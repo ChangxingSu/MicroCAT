@@ -49,20 +49,24 @@ if config["params"]["begin"] == "host":
     try:
         SAMPLES = microcat.parse_samples(config["params"]["samples"],platform = PLATFORM)
         SAMPLES_ID_LIST = SAMPLES.index.get_level_values("sample_id").unique()
-    except FileNotFoundError:
-        warning(f"ERROR: the samples file does not exist. Please see the README file for details. Quitting now.")
-        sys.exit(1)
+    except FileNotFoundError as e:
+        if "File not found" in str(e):
+            warning(f"ERROR: {e}. Please see the README file for details.")
+            sys.exit(1)
+
     include: "../rules/host.smk"
-    # include: "../rules/ERCC.smk"
     include: "../rules/classfier.smk"
+    include: "../rules/downstream.smk"
+
 
 elif config["params"]["begin"] == "classifier":
     try:
         SAMPLES = microcat.parse_bam_samples(config["params"]["samples"],platform = PLATFORM)
         SAMPLES_ID_LIST = SAMPLES.index.get_level_values("sample_id").unique()
-    except FileNotFoundError:
-        warning(f"ERROR: the samples file does not exist. Please see the README file for details. Quitting now.")
-        sys.exit(1)
+    except FileNotFoundError as e:
+        if "File not found" in str(e):
+            warning(f"ERROR: {e}. Please see the README file for details.")
+            sys.exit(1)
     
     include: "../rules/bam_host.smk"
     # include: "../rules/ERCC.smk"
@@ -71,4 +75,5 @@ elif config["params"]["begin"] == "classifier":
 rule all:
     input:
         rules.host_all.input,
+        rules.downstream_all.input,
         rules.classifier_all.input

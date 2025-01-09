@@ -157,7 +157,7 @@ def parse_bam_samples(sample_tsv, platform):
         raise ValueError("Sample names must not contain '.', please remove '.'")      
 
     # Create a 'fastqs_dir' column that contains the directory of the fastq files
-    samples_df['fastqs_dir'] = samples_df['fq1'].apply(lambda x: '/'.join(x.split('/')[:-1]))
+    samples_df['fastqs_dir'] = samples_df['bam'].apply(lambda x: '/'.join(x.split('/')[:-1]))
     
     # Set index
     if platform == 'lane':
@@ -176,7 +176,7 @@ def parse_bam_samples(sample_tsv, platform):
 
     for _, row in samples_df.iterrows():
         bam_exists = os.path.isfile(row['bam'])
-        if not fq1_exists:
+        if not bam_exists:
             raise FileNotFoundError(f"File not found: {row['bam']}")
 
     return samples_df

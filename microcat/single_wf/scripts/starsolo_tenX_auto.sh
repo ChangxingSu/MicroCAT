@@ -73,6 +73,10 @@ while [[ "$#" -gt 0 ]]; do
       clipAdapterType=$2
       shift 2
       ;;
+    --mem_bytes)
+      mem_bytes=$2
+      shift 2
+      ;;
     --variousParams)
       variousParams=$2
       shift 2
@@ -360,6 +364,7 @@ then
     --outSAMtype BAM SortedByCoordinate \
     --outSAMunmapped Within \
     --outSAMattrRGline ID:$sample PL:illumina SM:$sample LB:$CHEMISTRY \
+    --outBAMsortingBinsN 300 --limitBAMsortRAM $mem_bytes --outMultimapperOrder Random \
     --outSAMattributes NH HI AS nM CB UB CR CY UR UY GX GN \
     --outFileNamePrefix ./$sample/\
     $variousParams  
@@ -373,6 +378,7 @@ else
     --outSAMtype BAM SortedByCoordinate \
     --outSAMunmapped Within \
     --outSAMattrRGline ID:$sample PL:illumina SM:$sample LB:$CHEMISTRY \
+    --outBAMsortingBinsN 300 --limitBAMsortRAM $mem_bytes --outMultimapperOrder Random \
     --outSAMattributes NH HI AS nM CB UB CR CY UR UY GX GN \
     --outFileNamePrefix ./$sample/ \
     $variousParams
@@ -409,9 +415,12 @@ features_file="${sample}_features.tsv"
 matrix_file="${sample}_matrix.mtx"
 barcodes_file="${sample}_barcodes.tsv"
 mapped_bam_file="Aligned_sortedByCoord_out.bam"
-ln -sr "Solo.out/Gene/raw/features.tsv" "$features_file" ;
-ln -sr "Solo.out/Gene/raw/matrix.mtx" "$matrix_file" ; 
-ln -sr "Solo.out/Gene/raw/barcodes.tsv" "$barcodes_file" ;\
+cp "Solo.out/Gene/raw/features.tsv" "$features_file" ;
+cp "Solo.out/Gene/raw/matrix.mtx" "$matrix_file" ; 
+cp "Solo.out/Gene/raw/barcodes.tsv" "$barcodes_file" ;\
+gzip "Solo.out/Gene/raw/features.tsv";\
+gzip "Solo.out/Gene/raw/matrix.mtx";\
+gzip "Solo.out/Gene/raw/barcodes.tsv";\
 mv "Aligned.sortedByCoord.out.bam" "$mapped_bam_file";\
 
 

@@ -11,6 +11,13 @@ echo "Starting shell script"
 num_paired=$(samtools view "$unmapped_bam_sorted_file" | head -n 1000 | samtools view -c -f 1);
 echo "num_paired: $num_paired"
 
+
+# Check if the BAM file exists and is not empty
+if [ ! -s "$unmapped_bam_sorted_file" ]; then
+    echo "Warning: BAM file '$unmapped_bam_sorted_file' is empty or does not exist." ;
+    exit 1
+fi
+
 if [ "$num_paired" -eq 1000 ]; then
     echo "Detected pair end"
     samtools fastq --threads "$threads" -n "$unmapped_bam_sorted_file" -1 "$unmapped_r1_fastq" -2 "$unmapped_r2_fastq" ;
