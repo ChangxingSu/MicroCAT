@@ -103,3 +103,7 @@ src/*_files/
 src/.ipynb_checkpoints/
 microcat/.ipynb_checkpoints/
 docs/
+
+# temp file
+temp/
+backup/
