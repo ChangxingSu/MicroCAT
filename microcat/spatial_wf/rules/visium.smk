@@ -154,7 +154,7 @@ rule spaceranger_unmapped_extracted_sorted:
         )
 
 # Rule to aggregate all outputs
-rule all:
+rule spaceranger_all:
         input:
             expand(os.path.join(
                     config["output"]["host"],
