@@ -2,6 +2,7 @@ numpy>=1.20.0,<2.0.0
 pandas
 openpyxl
 snakemake >=7.0,<8.0
+pulp <2.8.0
 ruamel.yaml
 biopython >=1.73
 click
