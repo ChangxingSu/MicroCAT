@@ -540,39 +540,115 @@ def bulk_init(
 
 
 @init.command("spatial")
-@click.option('--begin',
-              type=click.Choice(['simulate','trimming','host','classifier','denosing'], case_sensitive=False),
-              default='trimming', 
+@click.option("-b",'--begin',
+              type=click.Choice(['host','classifier'], case_sensitive=False),
+              default='host', 
               show_default=True,
-              help='Pipeline starting point', 
-              show_choices=True,
-              prompt='Your name please')
-@click.option('--host',
-              default='starsolo',
+              help='Pipeline starting point')
+@click.option('--platform',
+              default='visium',
               show_default=True,
-              help='Which hoster used',
-              show_choices=True,
-              type=click.Choice(['starsolo', 'cellranger'], case_sensitive=False),
-              prompt='Select what host you use')
-@click.option('--chemistry', type=click.Choice(['smartseq', 'smartseq2', 'tenx_3pv1', 'tenx_3pv2',
-                                                'tenx_3pv3', 'seqwell', 'tenx_auto', 'dropseq',
-                                                'tenx_multiome', 'tenx_5ppe', 'seqwell', 'celseq2']),
-              default=None, help='Sequencing chemistry option, required when host is starsolo')
+              help='Spatial platform used',
+              type=click.Choice(['visium', 'slideseq', 'stereoseq'], case_sensitive=False),
+              prompt='Select what spatial platform you use')
 @click.option('--classifier',
-              default='pathseq',
+              default='kraken2uniq',
               show_default=True,
               help='Which classifier used',
               show_choices=True,
-              type=click.Choice(['kraken2uniq', 'krakenuniq', 'pathseq', 'metaphlan'], case_sensitive=False))
+              type=click.Choice(['kraken2uniq'], case_sensitive=False))
 @click.option("-s", "--samples",
               type=click.Path(exists=True),
-              prompt='Select what host you use',
+              prompt='Give sample tsv path',
               help="Samples list, tsv format required.")
-def spatial_init(hash_type,host,chemistry,classifier,samples):
-    """Single-cell RNA-seq microbiome mining pipeline init."""
-    click.echo(hash_type)
-    click.secho('Hello World!', fg='green')
-    click.echo('Initialized the database')
+@click.option(
+    "-d",
+    "--workdir",
+    metavar="WORKDIR",
+    type=str,
+    default="./",
+    help="Project workdir")
+@click.option(
+    "-p",
+    "--project_name",
+    metavar="PROJECT_NAME",
+    type=str,
+    default=os.path.basename(os.getcwd()),
+    help="Project name")
+def spatial_init(
+    begin,
+    workdir,
+    platform,
+    classifier,
+    samples,
+    project_name):
+    """
+    Spatial transcriptomics microbiome mining pipeline init.
+
+    Init 10x Visium Example:
+    \n
+    $ microcat init spatial --platform visium --classifier kraken2uniq
+    """
+    if workdir:
+        # Create a MicrocatConfig object using the provided working directory
+        project = MicrocatConfig(workdir, config_type="spatial")
+    
+        # Check if the working directory already exists
+        if os.path.exists(workdir):
+            click.secho(f"WARNING: The working directory '{workdir}' already exists.", fg="yellow")
+            proceed = input("Do you want to proceed? (y/n): ").lower()
+            if proceed != 'y':
+                print("Aborted.")
+                sys.exit(1)
+
+        # Print the project structure and create the necessary subdirectories
+        print(project.__str__())
+        project.create_dirs()
+
+        # Get the default configuration
+        conf = project.get_config()
+
+        # Update environment configuration file paths
+        for env_name in conf["envs"]:
+            conf["envs"][env_name] = os.path.join(os.path.realpath(workdir), f"envs/{env_name}.yaml")
+
+        for script_path in conf["scripts"]:
+            origin_path = conf["scripts"][script_path]
+            conf["scripts"][script_path] = os.path.join(os.path.dirname(__file__), "spatial_wf", f"{origin_path}")
+
+        conf["params"]["project"] = project_name
+        conf["params"]["begin"] = begin
+
+        # Configure platform-specific settings
+        if platform == "visium":
+            conf["params"]["host"]["spaceranger"]["do"] = True
+        else:
+            click.secho(f"WARNING: Platform {platform} support is coming soon!", fg="yellow")
+
+        # Configure classifier settings
+        for classifier_ in ["kraken2uniq"]:
+            if classifier_ == classifier:
+                conf["params"]["classifier"][classifier_]["do"] = True
+            else:
+                conf["params"]["classifier"][classifier_]["do"] = False
+
+        # Add the user-supplied samples table to the configuration
+        if samples:
+            conf["params"]["samples"] = os.path.abspath(samples)
+        else:
+            click.secho("ERROR: Please supply samples table", fg="red")
+            sys.exit(-1)
+
+        # Update the configuration file
+        update_config(
+            project.config_file, project.new_config_file, conf, remove=False
+        )
+
+        click.secho("NOTE: Config.yaml reset to default values.", fg='green')
+
+    else:
+        click.secho("ERROR: Please supply a workdir!", fg='red')
+        sys.exit(-1)
 
 @init.command("multi")
 @click.option('--begin',
