@@ -7,6 +7,7 @@ import os
 import sys
 import json
 from ruamel.yaml import YAML
+import numpy as np
 
 
 
@@ -27,11 +28,18 @@ FQ_HEADERS = {
     "SE": "single_reads",
 }
 
+SPATIAL_HEADERS = {
+    "VISIUM": "visium",
+    "SLIDESEQ": "slideseq",
+    "MERFISH": "merfish",
+    "ST": "st"
+}
 
 HEADERS = {
     "SRA": SRA_HEADERS,
     "BAM": BAM_HEADERS,
-    "FQ": FQ_HEADERS
+    "FQ": FQ_HEADERS,
+    "SPATIAL": SPATIAL_HEADERS
 }
 
 def parse_samples(sample_tsv, platform):
@@ -191,6 +199,68 @@ def parse_bam_samples(sample_tsv, platform):
     return samples_df
 
 
+def parse_spatial_samples(sample_tsv, platform="visium"):
+    """
+    Parse spatial transcriptomics sample information
+    
+    Parameters
+    ----------
+    sample_tsv : str
+        Path to sample sheet (TSV format)
+    platform : str
+        Spatial platform, one of: "visium", "slideseq", "steroseq"
+        
+    Returns
+    -------
+    pandas.DataFrame
+        Processed sample information with spatial coordinates
+    """
+    samples_df = pd.read_csv(sample_tsv, sep="\t")
+    
+    # Check required columns
+    required_cols = ['id', 'fq1', 'fq2', 'img'] 
+    if not set(required_cols).issubset(samples_df.columns):
+        raise ValueError(f"Columns {required_cols} must exist in the sample.tsv")
+
+    # Extract components from id
+    samples_df[['patient_tissue_section', 'library']] = samples_df['id'].str.rsplit("_", n=1, expand=True)
+    
+    # Extract patient, tissue and section
+    samples_df['tissue'] = samples_df['patient_tissue_section'].str.extract(r'(S\d+)_')
+    samples_df[['patient', 'section']] = samples_df['patient_tissue_section'].str.extract(r'(.+)_S\d+_(.+)')
+    
+    # Create sample identifier
+    samples_df['sample_id'] = samples_df['patient'] + '_' + samples_df['tissue']
+    
+    # Check sample name format
+    if samples_df['sample_id'].str.contains("\\.").any():
+        raise ValueError("Sample names must not contain '.'")
+    
+    # Add sequencing type
+    samples_df['seq_type'] = 'single-end'
+    samples_df.loc[samples_df['fq2'].notnull(), 'seq_type'] = 'paired-end'
+    
+    # Add fastq directory
+    samples_df['fastqs_dir'] = samples_df['fq1'].apply(lambda x: '/'.join(x.split('/')[:-1]))
+    
+    # Set index
+    samples_df = samples_df.set_index(["sample_id", "patient", "tissue", "section", "library"])
+    
+    # Validate files exist
+    for _, row in samples_df.iterrows():
+        # Check fastq files
+        if not os.path.isfile(row['fq1']):
+            raise FileNotFoundError(f"File not found: {row['fq1']}")
+            
+        if row['seq_type'] == 'paired-end' and not os.path.isfile(row['fq2']):
+            raise FileNotFoundError(f"File not found: {row['fq2']}")
+            
+        # Check spatial coordinates file
+        if not os.path.isfile(row['img']):
+            raise FileNotFoundError(f"Spatial image file not found: {row['img']}")
+            
+    return samples_df
+
 def get_starsolo_sample_id(SAMPLES, wildcards, fq_column):
     sample_id = wildcards.sample
     try:
@@ -299,3 +369,12 @@ def get_SAMattrRGline_by_sample(samples_df, wildcards):
     # Generate the --outSAMattrRGline input format
     rgline = " , ".join([f"ID:{cell_id}" for cell_id in cell_ids])
     return rgline
+
+
+def get_img(samples_df, wildcards):
+    sample_id = wildcards.sample
+    try:
+        img = samples_df.loc[sample_id, "img"]
+        return img
+    except KeyError:
+        raise ValueError(f"Sample ID '{sample_id}' not found in samples DataFrame")
