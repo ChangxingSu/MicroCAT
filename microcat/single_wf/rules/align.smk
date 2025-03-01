@@ -595,6 +595,9 @@ if config["params"]["align"]["bwa2"]["do"]:
             feature_file = os.path.join(
                 config["output"]["profile"],
                 "{sample}/microbiome_out/features.tsv"),
+            read_tsv = os.path.join(
+                config["output"]["profile"],
+                "{sample}/microbiome_out/read_assignment.tsv"),
         params:
             bam2mtx_script = config["scripts"]["bam2mtx"],
         resources:
@@ -606,7 +609,7 @@ if config["params"]["align"]["bwa2"]["do"]:
             config["envs"]["kmer_python"]
         shell:
             """
-            python {params.bam2mtx_script} --cb_bam {input.unmapped_bam_sorted_file} --align_bam {input.lca_bam} --nodes {input.nodes_dump} --names {input.names_dump} --profile_tsv {output.profile_tsv} --matrixfile {output.matrix_file} --cellfile {output.barcode_file} --taxfile {output.feature_file}  --log_file {log}
+            python {params.bam2mtx_script} --cb_bam {input.unmapped_bam_sorted_file} --align_result {input.em_reads_assign_tsv} --nodes {input.nodes_dump} --names {input.names_dump} --profile_tsv {output.profile_tsv} --matrixfile {output.matrix_file} --cellfile {output.barcode_file} --taxfile {output.feature_file}  --output_read_tsv {output.read_tsv} --log_file {log}
             """
     rule bwa2_aligned_all:
         input:
@@ -614,7 +617,8 @@ if config["params"]["align"]["bwa2"]["do"]:
             #     config["output"]["profile"],
             #     "{sample}/microbiome_out/microbiome_profile.tsv"),sample=SAMPLES_ID_LIST)
             expand(os.path.join(
-                config["output"]["classifier"],"bwa_align/{sample}/Aligned.BWA.sortedByCoord.out.sam2lca.csv"),sample=SAMPLES_ID_LIST)
+                config["output"]["profile"],
+                "{sample}/microbiome_out/read_assignment.tsv"),sample=SAMPLES_ID_LIST)
 else:
     rule bwa2_aligned_all:
         input:

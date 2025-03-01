@@ -125,7 +125,7 @@ def main():
     #Parse arguments
     parser = argparse.ArgumentParser(description='This script is used to output bam classified microbial data in cellranger format as feature.tsv,barcodes.tsv,matrix.mtx \n This requires the additional packages pysam(If your python version is up to 3.9)\n')
     parser.add_argument('--cb_bam', help='Input align SAM or BAM file with CB', required=True)
-    parser.add_argument('--align_bam', help='Input align SAM or BAM file', required=True)
+    parser.add_argument('--align_result', help='Input align tsv containing read name, taxonomy id', required=True)
     parser.add_argument('--nodes', help='Path for nodes.dmp file', required=True)
     parser.add_argument('--names', help='Path for names.dmp file', required=True)
     parser.add_argument('--verbose', action='store_true', help='Detailed print')
@@ -134,6 +134,7 @@ def main():
     parser.add_argument('--cellfile', help='Output cell barcodes', required=True)
     parser.add_argument('--taxfile', help='Output taxonomy IDs', required=True)
     parser.add_argument('--log_file', dest='log_file', required=True, help="File to write the log to")
+    parser.add_argument('--output_read_tsv', help='Output read assignment tsv with barcode information', required=False)
     args=parser.parse_args()
     
     # Set log level based on command line arguments
@@ -159,25 +160,25 @@ def main():
     logger.info('Prasing bam file', status='run')
     total_count = 0
     use_count = 0
+    failed_count = 0
     read_taxid_info_dict = dict()
     taxid_info_dict = dict()
-    with pysam.AlignmentFile(args.align_bam, "rb") as taxa_file:
+    with open(args.align_result, "r") as taxa_file:
 
-        for tread in taxa_file:
+        for line in taxa_file:
             total_count += 1
             try:
-                taxid = tread.get_tag("XT")
-                taxname = tread.get_tag("XN")
-                taxrank = tread.get_tag("XR")
+                read_name, tax_id, prob, tax_name, tax_genus = line.strip().split("\t")
             except:
+                failed_count += 1
                 continue
-            if taxrank == "genus" or taxrank == "species" or taxrank == "strain":
-                read_taxid_info_dict[tread.query_name] = {"taxid": taxid, "taxname": taxname, "taxrank": taxrank}
-                taxid_info_dict[taxid] = taxname
+            if tax_genus != "Unknown":
+                read_taxid_info_dict[read_name] = {"taxid": tax_id, "taxname": tax_name, "taxgenus": tax_genus}
+                taxid_info_dict[tax_id] = tax_name
 
                 use_count +=1
 
-    logger.info(f'Prasing bam file complete, total reads: {total_count}, use reads: {use_count}', status='complete')
+    logger.info(f'Prasing bam file complete, total reads: {total_count}, use reads: {use_count}, failed reads: {failed_count}, failed rate: {failed_count/total_count}', status='complete')
 
     logger.info('Checking barcode bam file type', status='run')
     is_cb = False
@@ -236,6 +237,9 @@ def main():
                     continue
                 
                 read_taxid = read_taxid_info_dict[bread.query_name]["taxid"]
+                # add barcode information to read_taxid_info_dict
+                read_taxid_info_dict[bread.query_name]["Barcode"] = bread_CB
+                
                 # Make nested dictionary with cells and transcripts
                 # {cellbarcode: {transcriptbarcode: krakentaxonomyID}
                 if bread_CB in nested_dict:
@@ -273,6 +277,9 @@ def main():
                     continue
                 
                 read_taxid = read_taxid_info_dict[bread.query_name]["taxid"]
+                # add barcode information to read_taxid_info_dict
+                read_taxid_info_dict[bread.query_name]["Barcode"] = bread_CB
+                
                 # Make nested dictionary with RG and taxonomy IDs
                 # {cellbarcode: {taxonomyID}
                 # If CB exists, add taxonomy ID to list 
@@ -308,6 +315,9 @@ def main():
                     continue
                 
                 read_taxid = read_taxid_info_dict[bread.query_name]["taxid"]
+                # add barcode information to read_taxid_info_dict
+                read_taxid_info_dict[bread.query_name]["Barcode"] = bread_RG
+                
                 # Make nested dictionary with RG and taxonomy IDs
                 # {cellbarcode: {taxonomyID}
                 # If RG exists, add taxonomy ID to list 
@@ -349,6 +359,28 @@ def main():
         tsv_output = csv.writer(f_output, delimiter='\t')
         for idx, tax in data:
             tsv_output.writerow([idx, tax])
+
+    # Output detailed results with barcode information
+    if args.output_read_tsv:
+        # Convert dictionary to list for DataFrame creation
+        detailed_results = []
+        for read_name, info in read_taxid_info_dict.items():
+            if "Barcode" in info:  # Only output reads with barcode information
+                result = {
+                    "Read_Name": read_name,
+                    "Taxonomy_ID": info["taxid"],
+                    "Species": info["taxname"],
+                    "Genus": info["taxgenus"],
+                    "Barcode": info["Barcode"]
+                }
+                if mode == "CB_UMI" and "UMI" in info:
+                    result["UMI"] = info["UMI"]
+                detailed_results.append(result)
+        
+        # Create DataFrame and output as TSV
+        detailed_df = pd.DataFrame(detailed_results)
+        detailed_df.to_csv(args.output_read_tsv, sep="\t", index=False)
+        logger.info(f"Detailed TSV with barcode information saved to {args.output_read_tsv}", status="complete")
 
     logger.info(f'Finish Saving the result', status='Complete')
 
