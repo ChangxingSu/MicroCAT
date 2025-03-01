@@ -390,7 +390,7 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
             15
         params:
             krak_sample_denosing_script= config["scripts"]["krak_sample_denosing"],
-            max_read_fraction = 0.15,
+            min_read_fraction = 0.15,
             inspect_file = os.path.join(config["params"]["classifier"]["kraken2uniq"]["kraken2_database"],"inspect.txt"),
             ktaxonomy_file = os.path.join(config["params"]["classifier"]["kraken2uniq"]         ["kraken2_database"],"ktaxonomy.tsv"),
             barcode_tag = ("CB") if PLATFORM == "lane" else "RG"
@@ -406,10 +406,9 @@ if config["params"]["classifier"]["kraken2uniq"]["do"]:
             --krak_output {input.krak2_extracted_output} \
             --ktaxonomy {params.ktaxonomy_file}\
             --inspect {params.inspect_file} \
-            --max_read_fraction {params.max_read_fraction} \
+            --min_read_fraction {params.min_read_fraction} \
             --qc_output_file {output.krak_sample_denosing_result} \
             --raw_qc_output_file {output.krak_sample_raw_result} \
-            --barcode_tag {params.barcode_tag} \
             --log_file {log};
             '''
     rule krak_study_denosing:

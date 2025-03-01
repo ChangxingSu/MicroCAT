@@ -2,7 +2,7 @@ from math import ceil
 import glob
 import os
 
-
+localrules: download_taxdump, download_candidate_species
 
 def get_fna_chunks(wildcards):
     # Get the file path
