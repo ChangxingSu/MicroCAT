@@ -470,19 +470,24 @@ def main():
             descendants_ascendants_taxid_list.append(curr_n.taxid)
         rtl_dict[species_tax_id] = descendants_ascendants_taxid_list
 
-    # Check file is pair end
-    is_paired = False
-    read_count = 0
-    with pysam.AlignmentFile(args.bam_file, 'rb') as krak_bamfile:
-            for kread in krak_bamfile:
-                read_count += 1
-                if kread.is_paired:
-                    is_paired = True
-                    break
-                else:
-                    continue
-                if read_count >= 100:
-                    break
+    # Auto check file read type
+    is_paired = None
+    with open(args.krak_output_file, 'r') as kfile:
+        for i, kraken_line in enumerate(kfile):
+            if i >= 5:  # only check first 5 lines
+                break
+            try:
+                read_type, query_name, taxid_info, read_len, kmer_position = kraken_line.strip().split('\t')
+                current_paired = "|:|" in kmer_position
+                if is_paired is None:
+                    is_paired = current_paired
+                elif is_paired != current_paired:
+                    raise ValueError("Inconsistent paired-end status detected in first 5 lines, please check the kraken output file and fastq file")
+            except Exception as e:
+                logger.error(f"Error processing line {i+1}: {e}")
+                raise
+    if is_paired is None:
+        raise ValueError("Could not determine paired-end status from first 5 lines, please check the kraken output file and fastq file")
 
     # Reading kraken2 classifier output information
     logger.info('Reading kraken2 classifier output information', status='run')
@@ -505,7 +510,7 @@ def main():
                     continue
                 if tax_id == "-1":
                     continue
-                #Skip if reads are human/artificial/synthetic
+                # only select desired taxid
                 if (tax_id in desired_taxid_list):
                     r1_len, r2_len = read_len.split('|')
                     r1_kmer_position, r2_kmer_position  = kmer_position.split(' |:| ')
@@ -518,10 +523,6 @@ def main():
                         taxid_fraction_counts[tax_id][kmer_taxid] += int(count)
                     # if taxid_counts[tax_id] >= args.nsample:
                     #     continue 
-                    # if tax_id in desired_main_taxid_list:
-                    #     main_lvl_tax_id = tax_id
-                    # else:
-                    #     main_lvl_tax_id = taxid2node[tax_id].get_main_lvl_taxid()
                 else:
                     continue
     else:
@@ -540,7 +541,7 @@ def main():
                     continue
                 if tax_id == "-1":
                     continue
-                #Skip if reads are human/artificial/synthetic
+                # only select desired taxid
                 if (tax_id in desired_taxid_list):
                     if tax_id not in taxid_counts:
                         taxid_counts[tax_id] = 1
@@ -551,11 +552,6 @@ def main():
                         taxid_fraction_counts[tax_id][kmer_taxid] += int(count)
                     # if taxid_counts[tax_id] >= args.nsample:
                     #     continue 
-                    # if tax_id in desired_main_taxid_list:
-                    #     main_lvl_tax_id = tax_id
-                    # else:
-                    #     main_lvl_tax_id = taxid2node[tax_id].get_main_lvl_taxid()
-                    # kraken_data[query_name] = [main_lvl_tax_id, read_len, kmer_position]
                 else:
                     continue
         
@@ -563,14 +559,14 @@ def main():
     taxid_counts_ratio = {}
     for target_taxid in desired_taxid_list:
         sorted_taxids = sorted(taxid_fraction_counts[target_taxid].items(), key=lambda x: x[1], reverse=True)[:5]
-        # 计算总kmer数
+        # calculate total kmer count
         total_kmers = sum(kmer_count for _, kmer_count in sorted_taxids)
 
         target_taxid_descendants = descendants_dict[target_taxid]
-        # 获取taxid的kmer数，解决取不到的情况
+        # get kmer count of taxid, solve the case that taxid is not in descendants_dict
         target_kmer = next((kmer_count for taxid, kmer_count in sorted_taxids if taxid in target_taxid_descendants), 0)
 
-        # 计算比例
+        # calculate ratio
         if target_kmer > 0:
             ratio = target_kmer / total_kmers
         else:
@@ -585,12 +581,14 @@ def main():
     num_unique_genus = len(desired_krak_report['genus_level_taxid'].unique())
     logger.info(f'Found {num_unique_species} unique species level taxids and {num_unique_genus} unique genus level taxids', status='summary')    
 
+    # copy desired_krak_report as final_desired_krak_report
     final_desired_krak_report = desired_krak_report.copy()
     # Convert 'ncbi_taxa' column to string data type
     final_desired_krak_report['ncbi_taxa'] = final_desired_krak_report['ncbi_taxa'].astype(str)
     final_desired_krak_report['read_fraction'] = final_desired_krak_report['ncbi_taxa'].map(taxid_counts_ratio)
-    # final_desired_krak_report.drop('fraction', axis=1, inplace=True)
     final_desired_krak_report['cov'].replace([float('inf'), float('-inf')], float('nan'), inplace=True)
+
+    # calculate max cov, max uniqminimizers, max minimizers, max read fraction
     final_desired_krak_report['max_cov'] = np.where(
         final_desired_krak_report['classification_rank'].str.startswith('S'),
         final_desired_krak_report.groupby('main_level_taxid')['cov'].transform('max'),
@@ -617,7 +615,7 @@ def main():
     num_unique_species = len(final_desired_krak_report['ncbi_taxa'].unique())
     logger.info(f'Found {num_unique_species} unique species level taxids having qc indictor', status='summary')
 
-    # Save data
+    # save raw result
     logger.info(f'Saving the raw result', status='run')
     final_desired_krak_report.to_csv(args.raw_qc_output_file, sep="\t", index=False)
     logger.info(f'Finishing saving the result', status='complete')
@@ -625,9 +623,11 @@ def main():
     logger.info(f'Filtering taxa with quality control indicators', status='run')
     final_desired_krak_report['superkingdom'] = final_desired_krak_report['superkingdom'].astype(str)
 
-    # 使用参数化的阈值而不是硬编码值
+    # get min_read_fraction from args
     min_read_fraction = args.min_read_fraction
     
+    # filter desired_krak_report
+    # TODO: each superkingdom have different min_read_fraction
     filter_desired_krak_report = final_desired_krak_report.copy()[
             (
             (final_desired_krak_report['max_minimizers'] > 5) &
@@ -650,9 +650,8 @@ def main():
         )
         ]
 
+    # remove space
     filter_desired_krak_report['scientific name'] = filter_desired_krak_report['scientific name'].apply(lambda x: x.strip())
-    # # Filter out rows where 'ncbi_taxa' matches any value from 'excluded_taxonomy_ids'
-    # filter_desired_krak_report = filter_desired_krak_report[~filter_desired_krak_report['ncbi_taxa'].isin(args.exclude)]
 
     logger.info(f'Finishing filtering taxa with quality control indicators', status='complete')
     num_unique_species = len(filter_desired_krak_report['ncbi_taxa'].unique())
@@ -666,7 +665,6 @@ def main():
     logger.info(f'Saving the result', status='run')
     filter_desired_krak_report.to_csv(args.qc_output_file, sep="\t", index=False)
     logger.info(f'Finishing saving the result', status='complete')
-
 
 if __name__ == "__main__":
     main()
