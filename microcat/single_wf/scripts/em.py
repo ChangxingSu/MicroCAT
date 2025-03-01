@@ -231,6 +231,11 @@ def expectation_maximization_iterations(log_p_rgs, freq, lli_thresh, input_thres
     can_help = True
     counter = 0
     
+    # 确保初始频率值都为正数
+    for g in freq:
+        if freq[g] <= 0:
+            freq[g] = 1e-10  # 设置一个非常小但非零的值
+    
     while True:
         # 判断是否执行阈值处理
         if counter % thresholding_iter_step == 0 and can_help:
@@ -244,51 +249,79 @@ def expectation_maximization_iterations(log_p_rgs, freq, lli_thresh, input_thres
         # Expectation步骤
         log_likelihood = 0
         for r, (taxids, log_scores) in log_p_rgs.items():
+            # 过滤掉无效物种和频率为零的物种
+            valid_indices = []
+            for i, g in enumerate(taxids):
+                if strain_valid[g] and freq[g] > 0:
+                    valid_indices.append(i)
+            
+            # 如果该读段没有有效的映射物种，则跳过
+            if not valid_indices:
+                continue
+                
             # 计算读段r归属于各个物种的概率
             p_r = {}  # 归一化概率p(s|r)
             max_log_p = -float('inf')
             
             # 找出最大对数概率以防数值溢出
-            for i, g in enumerate(taxids):
-                if strain_valid[g]:
-                    log_p = log_scores[i]
-                    if log_p + math.log(freq[g]) > max_log_p:
-                        max_log_p = log_p + math.log(freq[g])
+            for i in valid_indices:
+                g = taxids[i]
+                log_p = log_scores[i]
+                # 防止对数计算错误
+                try:
+                    log_value = log_p + math.log(max(freq[g], 1e-300))
+                    if log_value > max_log_p:
+                        max_log_p = log_value
+                except ValueError:
+                    # 如果出现数值错误，记录并跳过
+                    print(f"Warning: math domain error for g={g}, freq[g]={freq[g]}")
+                    continue
             
+            # 如果无法计算最大对数概率，则跳过
+            if max_log_p == -float('inf'):
+                continue
+                
             # 计算分母(归一化因子)
             log_denom = 0
             first = True
-            for i, g in enumerate(taxids):
-                if strain_valid[g]:
-                    log_p = log_scores[i]
-                    log_num = log_p + math.log(freq[g]) - max_log_p
+            for i in valid_indices:
+                g = taxids[i]
+                log_p = log_scores[i]
+                try:
+                    log_num = log_p + math.log(max(freq[g], 1e-300)) - max_log_p
                     if first:
                         log_denom = log_num
                         first = False
                     else:
                         log_denom = np.logaddexp(log_denom, log_num)
+                except ValueError:
+                    continue
             
             # 计算每个有效物种的后验概率p(s|r)
             p_r = {}
-            for i, g in enumerate(taxids):
-                if strain_valid[g]:
-                    log_p = log_scores[i]
-                    log_num = log_p + math.log(freq[g]) - max_log_p
+            for i in valid_indices:
+                g = taxids[i]
+                log_p = log_scores[i]
+                try:
+                    log_num = log_p + math.log(max(freq[g], 1e-300)) - max_log_p
                     p_r[g] = math.exp(log_num - log_denom)
                     strain_read_count[g] += p_r[g]
+                except (ValueError, OverflowError):
+                    continue
             
-            p_sgr[r] = p_r
-            
-            # 更新对数似然
-            log_likelihood += max_log_p + log_denom
+            if p_r:  # 只有当p_r非空时才添加
+                p_sgr[r] = p_r
+                # 更新对数似然
+                log_likelihood += max_log_p + log_denom
         
         # Maximization步骤 - 更新丰度
         total_reads_assigned = sum(strain_read_count.values())
-        for g in freq:
-            if strain_valid[g]:
-                freq[g] = strain_read_count[g] / total_reads_assigned
-            else:
-                freq[g] = 0
+        if total_reads_assigned > 0:  # 确保分母非零
+            for g in freq:
+                if strain_valid[g]:
+                    freq[g] = max(strain_read_count[g] / total_reads_assigned, 1e-10)
+                else:
+                    freq[g] = 0
         
         # 检查收敛性
         if abs(log_likelihood - prev_log_likelihood) < lli_thresh:
