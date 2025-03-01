@@ -244,9 +244,10 @@ def main():
     
     logger.info('Reading Kraken report file', status='run')
     candidate_species = pd.read_csv(args.candidate,sep="\t")
-    # candidate_species['sample'] = candidate_species['sample'].str.replace('_krak_sample_denosing', '')
-
-    # candidate_species = candidate_species.loc[candidate_species['sample'] == args.sample_name]
+    # extract sample name from kraken report file
+    candidate_species['sample'] = candidate_species['sample'].str.replace('_krak_sample_denosing', '')
+    # select the sample
+    candidate_species = candidate_species.loc[candidate_species['sample'] == args.sample_name]
     # print(candidate_species)
     # sys.exit()
     desired_taxid_list = set(candidate_species["main_level_taxid"].unique())
