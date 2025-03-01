@@ -13,6 +13,7 @@ params:
       image_params:
         reorient-images: true
         unknown-slide: true
+      probe_set: ""
       variousParams: ""
 
   classifier:

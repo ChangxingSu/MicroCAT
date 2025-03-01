@@ -7,6 +7,10 @@ rule format_fastq_for_spaceranger:
         config["params"]["samples"],
     output:
         os.path.join(config["output"]["raw"], "reads/{sample}/{sample}_summary.json")
+    resources:
+        mem_mb = 100000
+    threads:
+        40
     script:
         "../scripts/preprocess_raw.py"
 
@@ -14,6 +18,7 @@ rule format_fastq_for_spaceranger:
 rule spaceranger_count:
         input:
             sample_summary = os.path.join(config["output"]["raw"], "reads/{sample}/{sample}_summary.json"),
+            image = lambda wildcards: microcat.get_img(SAMPLES, wildcards),
         output:
             # Basic matrix files for gene expression data
             features_file = os.path.join(
@@ -49,9 +54,6 @@ rule spaceranger_count:
             tissue_positions = os.path.join(
                 config["output"]["host"],
                 "spaceranger_count/{sample}/tissue_positions.csv"),
-            spatial_enrichment = os.path.join(
-                config["output"]["host"],
-                "spaceranger_count/{sample}/spatial_enrichment.csv"),
         params:
             sr_out = os.path.join(
                 config["output"]["host"],
@@ -60,6 +62,8 @@ rule spaceranger_count:
             fastqs_dir = os.path.abspath(os.path.join(config["output"]["raw"], "reads/{sample}/")),
             SampleID="{sample}",
             variousParams = config["params"]["host"]["spaceranger"]["variousParams"],
+            probe_set_params = "--probe-set=" + config["params"]["host"]["spaceranger"]["probe_set"] if config["params"]["host"]["spaceranger"]["probe_set"] else "",
+            unknown_slide = config["params"]["host"]["spaceranger"]['image_params']['unknown-slide'],
         threads:
             config["resources"]["spaceranger"]["threads"]
         resources:
@@ -73,15 +77,21 @@ rule spaceranger_count:
         shell:
             """
             # Run spaceranger count with specified parameters
+
+            cd {params.sr_out} ;
+
             spaceranger count \
             --id={params.SampleID} \
             --transcriptome={params.reference} \
             --fastqs={params.fastqs_dir} \
             --sample={params.SampleID} \
             --localcores={threads} \
+            --unknown-slide={params.unknown_slide} \
+            --image={input.image} \
+            --nosecondary \
+            --reorient-images false \
             --localmem=$(({resources.mem_mb}/1024)) \
-            --unknown-slide \
-            --reorient-images \
+            {params.probe_set_params} \
             {params.variousParams} \
             2>&1 | tee ../../../{log} ;  
             
@@ -108,7 +118,6 @@ rule spaceranger_count:
             ln -sr "{params.sr_out}{params.SampleID}/outs/possorted_genome_bam.bam.bai" "{output.mapped_bam_index}";
             ln -sr "{params.sr_out}{params.SampleID}/outs/spatial/scalefactors_json.json" "{output.spatial_scale}";
             ln -sr "{params.sr_out}{params.SampleID}/outs/spatial/tissue_positions.csv" "{output.tissue_positions}";
-            ln -sr "{params.sr_out}{params.SampleID}/outs/spatial/spatial_enrichment.csv" "{output.spatial_enrichment}";
             
             # Move the decompressed barcodes file
             mv "{params.sr_out}{params.SampleID}/outs/barcodes.tsv" "{output.barcodes_file}";
@@ -117,7 +126,7 @@ rule spaceranger_count:
 # Rule to extract and sort unmapped reads from spaceranger BAM output
 rule spaceranger_unmapped_extracted_sorted:
     input:
-        mapped_bam = os.path.join(config["output"]["host"], "spaceranger_count/{sample}/{sample}_possorted_genome_bam.bam")
+        mapped_bam_file = os.path.join(config["output"]["host"], "spaceranger_count/{sample}/{sample}_possorted_genome_bam.bam")
     output:
         unmapped_bam_sorted_file = os.path.join(config["output"]["host"], "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam"),
         unmapped_bam_sorted_index = os.path.join(config["output"]["host"], "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam.bai"),
@@ -153,12 +162,19 @@ rule spaceranger_unmapped_extracted_sorted:
             '''
         )
 
-# Rule to aggregate all outputs
-rule spaceranger_all:
+if config["params"]["host"]["spaceranger"]["do"]:
+    # Rule to aggregate all outputs
+    rule spaceranger_all:
         input:
             expand(os.path.join(
                     config["output"]["host"],
                     "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam"), sample=SAMPLES_ID_LIST), # Unmapped reads
             expand(os.path.join(
                     config["output"]["host"],
-                    "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bai"), sample=SAMPLES_ID_LIST) # Unmapped reads index
+                    "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam.bai"), sample=SAMPLES_ID_LIST) # Unmapped reads index
+    
+else:
+    # if spaceranger is not specified, we dont need to run spaceranger_all
+    rule spaceranger_all:
+        input:
+        

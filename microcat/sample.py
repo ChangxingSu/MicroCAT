@@ -374,7 +374,14 @@ def get_SAMattrRGline_by_sample(samples_df, wildcards):
 def get_img(samples_df, wildcards):
     sample_id = wildcards.sample
     try:
-        img = samples_df.loc[sample_id, "img"]
-        return img
+        # Get the unique image paths for the sample
+        imgs = samples_df.loc[sample_id, "img"].unique()
+        
+        # check if there is only one unique image path
+        if len(imgs) > 1:
+            raise ValueError(f"Sample {sample_id} has multiple different image files: {imgs}")
+            
+        # return the unique image path
+        return imgs[0]
     except KeyError:
-        raise ValueError(f"Sample ID '{sample_id}' not found in samples DataFrame")
+        raise ValueError(f"Sample ID '{sample_id}' dont have image file, please check the sample.tsv")

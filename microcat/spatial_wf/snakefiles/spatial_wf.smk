@@ -35,7 +35,8 @@ if config["params"]["begin"] == "host":
             sys.exit(1)
 
     include: "../rules/visium.smk"
-
+    include: "../rules/krakenuniq.smk"
 rule all:
     input:
         rules.spaceranger_all.input,
+        rules.krakuniq_all.input
