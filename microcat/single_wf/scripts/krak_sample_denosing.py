@@ -358,9 +358,6 @@ def main():
         required=True, default='logfile_download_genomes.txt',
         help="File to write the log to")
     parser.add_argument('--verbose', action='store_true', help='Detailed print')
-    parser.add_argument('--exclude', required=False,
-        default=9606, nargs='+',
-        help='Taxonomy ID[s] of reads to exclude (space-delimited)')
     parser.add_argument('--min_read_fraction', required=False,
         default=0.15, type=float, help='Minimum fraction of kmers directly assigned to taxid [default=0.15]')
     
