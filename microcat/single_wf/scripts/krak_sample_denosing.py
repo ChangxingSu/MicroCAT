@@ -340,40 +340,30 @@ def main():
         dest="krak_report_file", help='Input kraken report file for denosing')
     parser.add_argument('--krak_output', required=True,
         dest='krak_output_file', help='Input kraken output file for denosing')
-    parser.add_argument('--krak_mpa_report', required=True,
-        dest='krak_mpa_report_file', help='Input kraken output file for denosing')
-    parser.add_argument('--bam', required=True,
-        dest='bam_file', help='Input origin bam file for denosing')
     parser.add_argument('--raw_qc_output_file', required=True,
         help='Output denosed info at individual level')
     parser.add_argument('--qc_output_file', required=True,
         help='Output denosed info at individual level')
     parser.add_argument('--ktaxonomy', required=True,
         help='Kraken2 database ktaxonomy file path')
-    parser.add_argument('--cluster', required=True,
-        help='barcode cluster file path')
     parser.add_argument('--inspect', required=True,
         dest="inspect_file", help='Kraken2 database inspect file path')
-    parser.add_argument('--kmer_len', required=False,
-        default=35, help='Kraken classifer kmer length [default=35]')
     parser.add_argument('--exclude', required=False,
         default=9606, nargs='+',
         help='Taxonomy ID[s] of reads to exclude (space-delimited)')
-    parser.add_argument('--min_frac', required=False,
-        default=0.5, type=float, help='minimum fraction of kmers directly assigned to taxid to use read [default=0.5]')
     parser.add_argument('--nsample', required=False,
         default=2500,
         help='Max number of reads to sample per taxa')
-    parser.add_argument('--min_entropy', required=False,
-        default=1.2, type=float, help='minimum entropy of sequences cutoff [default=1.2]')
-    parser.add_argument('--min_dust', required=False,
-        default=0.05, type=float, help='minimum dust score of sequences cutoff [default=1.2]')
     parser.add_argument('--log_file', dest='log_file', 
         required=True, default='logfile_download_genomes.txt',
         help="File to write the log to")
     parser.add_argument('--verbose', action='store_true', help='Detailed print')
-    parser.add_argument("--barcode_tag", default="CB", help="Barcode tag to use for extracting barcodes")
-
+    parser.add_argument('--exclude', required=False,
+        default=9606, nargs='+',
+        help='Taxonomy ID[s] of reads to exclude (space-delimited)')
+    parser.add_argument('--min_read_fraction', required=False,
+        default=0.15, type=float, help='Minimum fraction of kmers directly assigned to taxid [default=0.15]')
+    
     args=parser.parse_args()
     
     # Set log level based on command line arguments
@@ -415,8 +405,7 @@ def main():
     krak_report['cov'] = krak_report['uniqminimizers']/krak_report['minimizers_taxa']
     krak_report['dup'] = krak_report['minimizers']/krak_report['uniqminimizers']
 
-    # filter kraken_file to species and genus only
-    # desired_krak_report = krak_report.copy()[krak_report['classification_rank'].str.startswith((('G', 'S')), na=False)]
+    # filter kraken_file to species only
     desired_krak_report = krak_report.copy()[krak_report['classification_rank'].str.startswith(('S'), na=False)]
     desired_krak_report['species_level_taxid'] = desired_krak_report.apply(lambda x: taxid2node[str(x['ncbi_taxa'])].taxid_to_desired_rank("S"), axis=1)
     desired_krak_report['main_level_taxid'] = desired_krak_report.apply(lambda x: taxid2node[str(x['ncbi_taxa'])].get_main_lvl_taxid(), axis=1)
@@ -428,8 +417,6 @@ def main():
     desired_krak_report = desired_krak_report[desired_krak_report["is_microbiome"]==True]
     # Transform data type
     desired_krak_report['species_level_taxid'] = desired_krak_report['species_level_taxid'].astype(str)
-    # desired_krak_report['species_level_taxid'] = desired_krak_report['species_level_taxid'].astype(str)
-    # desired_krak_report['species_level_taxid'] = desired_krak_report['species_level_taxid'].astype(str)
     desired_krak_report['ncbi_taxa'] = desired_krak_report['ncbi_taxa'].astype(str)
     
     # desired_krak_report
@@ -437,14 +424,15 @@ def main():
     desired_main_taxid_list = set(desired_krak_report['main_level_taxid'].unique())
     logger.info('Finished processing kraken2 classifier result', status='complete')
     # del df
+    del krak_report
 
-    lineage_dict = {}
-    for main_tax_id in desired_main_taxid_list:
-        try:
-            lineage_taxid_list = taxid2node[main_tax_id].lineage_to_desired_rank("D")
-            lineage_dict[main_tax_id] = lineage_taxid_list
-        except (ValueError, KeyError) as e:
-            print("Error occur:", e)
+    # lineage_dict = {}
+    # for main_tax_id in desired_main_taxid_list:
+    #     try:
+    #         lineage_taxid_list = taxid2node[main_tax_id].lineage_to_desired_rank("D")
+    #         lineage_dict[main_tax_id] = lineage_taxid_list
+    #     except (ValueError, KeyError) as e:
+    #         print("Error occur:", e)
     descendants_dict = {}
     for tax_id in desired_taxid_list:
         try:
@@ -553,7 +541,6 @@ def main():
                     logger.error(f"An error occurred while processing the Kraken taxonomy file: {e}")
                     logger.error(f"Here is an error. Queryname: {query_name}")
                     continue
-
                 if tax_id == "-1":
                     continue
                 #Skip if reads are human/artificial/synthetic
@@ -641,28 +628,26 @@ def main():
     logger.info(f'Filtering taxa with quality control indicators', status='run')
     final_desired_krak_report['superkingdom'] = final_desired_krak_report['superkingdom'].astype(str)
 
-    bac_cov_cutoff = total_reads/10000000*0.0001
-    viral_cov_cutoff = total_reads/10000000*0.0005
+    # 使用参数化的阈值而不是硬编码值
+    min_read_fraction = args.min_read_fraction
     
     filter_desired_krak_report = final_desired_krak_report.copy()[
             (
             (final_desired_krak_report['max_minimizers'] > 5) &
-            # (final_desired_krak_report['average_seq_dust_score'] > args.min_dust) &
-            # (final_desired_krak_report['mean_seq_confidence_score_q75'] > 0.3) &
             (
                 (
                     ((final_desired_krak_report['superkingdom'] == '2') &
                         (
-                            ((final_desired_krak_report['max_read_fraction'] >= 0.15)) 
+                            ((final_desired_krak_report['max_read_fraction'] >= min_read_fraction)) 
                         )
                     )                         
                     |
-                    ((final_desired_krak_report['superkingdom'] == '2157')& (final_desired_krak_report['max_read_fraction'] >= 0.15)) 
+                    ((final_desired_krak_report['superkingdom'] == '2157')& (final_desired_krak_report['max_read_fraction'] >= min_read_fraction)) 
 
                     |
-                    ((final_desired_krak_report['superkingdom'] == '2759') & (final_desired_krak_report['max_read_fraction'] >= 0.15)) 
+                    ((final_desired_krak_report['superkingdom'] == '2759') & (final_desired_krak_report['max_read_fraction'] >= min_read_fraction)) 
                     |
-                    ((final_desired_krak_report['superkingdom'] == '10239') & (final_desired_krak_report['max_read_fraction'] >= 0.15)) 
+                    ((final_desired_krak_report['superkingdom'] == '10239') & (final_desired_krak_report['max_read_fraction'] >= min_read_fraction)) 
                 )
             )
         )
