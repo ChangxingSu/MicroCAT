@@ -439,7 +439,7 @@ if config["params"]["align"]["bwa2"]["do"]:
                         "bwa2/{chunk_num}_bulid_database_benchmark.tsv")
         resources:
             mem_mb=(
-                lambda wildcards, input: os.stat(input.chunk_fna).st_size /1024 /1024 * 5
+                lambda wildcards, input: int(os.stat(input.chunk_fna).st_size /1024 /1024 * 5)
             ),
         threads: 
             config["resources"]["bwa2"]["threads"]
@@ -470,9 +470,6 @@ if config["params"]["align"]["bwa2"]["do"]:
             bwa_aligned_chunk_sorted_mapped_bam = temp(os.path.join(
                 config["output"]["classifier"],"bwa_align/{sample}/Aligned.BWA.chunk_{chunk_num}.sortedByCoord.mapped.out.bam")),
         input:
-            krak2_extracted_bam = os.path.join(
-                config["output"]["classifier"],
-                "rmhost_extracted_classified_output/{sample}/{sample}_kraken2_extracted_classified.bam"),
             bwa_idx = os.path.join(config['params']['align']['bwa2']['db'],"index",config['params']['project'],"chunk_{chunk_num}/chunk_{chunk_num}.amb"),
             krak_screened_fastq = os.path.join(
                 config["output"]["classifier"],
@@ -521,157 +518,103 @@ if config["params"]["align"]["bwa2"]["do"]:
         output:
             bwa_aligned_sorted_mapped_bam = os.path.join(
                 config["output"]["classifier"],"bwa_align/{sample}/Aligned.BWA.sortedByCoord.mapped.out.bam"),
-            # bwa_aligned_sorted_mapped_bam_index = os.path.join(
-            #     config["output"]["classifier"],"bwa_align/{sample}/Aligned.BWA.sortedByCoord.mapped.out.bam.bai"),
         log:
             os.path.join(config["logs"]["classifier"],
                         "bwa/{sample}/bwa_merge_alignment.log")
         threads: 
             config["resources"]["bwa2"]["threads"]
         resources:
-            # mem_mb=(
-            #     lambda wildcards, input :max([os.stat(f).st_size / 1024 / 1024 * 2 for f in set(input.chunk_aligned_bam)])
-            # )
             mem_mb=5000
         shell:
             """
             samtools merge --threads {threads} -f {output.bwa_aligned_sorted_mapped_bam} {input.chunk_aligned_bam} 2> {log}
 
             """
-            # samtools index {output.bwa_aligned_sorted_mapped_bam}
-    rule bwa2_lca_classifier:
+    rule bwa2_expection_maximization_classifier:
         input:
             bwa_aligned_sorted_mapped_bam = os.path.join(
                 config["output"]["classifier"],"bwa_align/{sample}/Aligned.BWA.sortedByCoord.mapped.out.bam"),
+            names_dump = os.path.join(
+            config["params"]["align"]["download_dir"],
+            "taxonomy/names.dmp"),
+            nodes_dump = os.path.join(
+            config["params"]["align"]["download_dir"],
+            "taxonomy/nodes.dmp"),            
+            acc2tax = os.path.join(
+                config["params"]["align"]["download_dir"],
+                "acc2tax/",f"{config['params']['project']}_acc2tax.txt"), 
         output:
-            align_tsv = os.path.join(
-                config["output"]["profile"],
-                "{sample}/microbiome_out/microbiome_align.tsv"), 
-        threads:
-            10
+            em_reads_assign_tsv = os.path.join(
+                config["output"]["classifier"],"bwa_align/{sample}/Aligned.BWA.sortedByCoord.out.em_reads_assign.tsv"),
+        params:
+            bwa_output = os.path.join(
+                config["output"]["classifier"],"bwa_align","{sample}"),
+            em_script = config["scripts"]["em_script"],
+            project = config["params"]["project"],
         resources:
-            mem_mb = 10000,
-        shell:
-            '''
-            mora -s {input.bwa_aligned_sorted_mapped_bam} -o {output.align_tsv} -t 10 --tax /data/comics-sucx/software/MORA/Taxonomy
-            '''
-    rule bwa2_assign_mora:
-        input:
-            cb_bam = os.path.join(
-                config["output"]["host"],
-                "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam"),
-            mora_assign = os.path.join(
-                config["output"]["profile"],
-                "{sample}/microbiome_out/microbiome_align.tsv"), 
-        output:
-            mora_genus_tsv = os.path.join(
-                config["output"]["profile"],
-                "{sample}/microbiome_out/microbiome_genus.tsv"),
-            mora_species_tsv = os.path.join(
-                config["output"]["profile"],
-                "{sample}/microbiome_out/microbiome_species.tsv"),
+            mem_mb=config["resources"]["krak2_matrix_build"]["mem_mb"]
+        benchmark:
+            os.path.join(config["benchmarks"]["classifier"],
+                "bwa/{sample}/bwa_assigned.tsv")
+        conda:
+            config["envs"]["kmer_python"]
         log:
             os.path.join(config["logs"]["classifier"],
-                        "mora/{sample}/mora_assign.log")
-        threads:
-            1
-        resources:
-            mem_mb = 1000,
-        params:
-            scripts = "/data/comics-sucx/project/host-microbiome/MicroCAT/microcat/single_wf/scripts/mora2sc.py"
+                        "sam2lca/{sample}_sam2lca.log")
         shell:
-            '''
-            python {params.scripts} \
-            --cb_bam {input.cb_bam} \
-            --mora_genus_tsv {output.mora_genus_tsv} \
-            --mora_species_tsv {output.mora_species_tsv} \
-            --mora_assign {input.mora_assign} \
-            --log_file {log};
-            '''
-    # rule bwa2_lca_classifier:
-    #     input:
-    #         bwa_aligned_sorted_mapped_bam = os.path.join(
-    #             config["output"]["classifier"],"bwa_align/{sample}/Aligned.BWA.sortedByCoord.mapped.out.bam"),
-    #         names_dump = os.path.join(
-    #         config["params"]["align"]["download_dir"],
-    #         "taxonomy/names.dmp"),
-    #         nodes_dump = os.path.join(
-    #         config["params"]["align"]["download_dir"],
-    #         "taxonomy/nodes.dmp"),            
-    #         acc2tax = os.path.join(
-    #             config["params"]["align"]["download_dir"],
-    #             "acc2tax/",f"{config['params']['project']}_acc2tax.txt"), 
-    #     output:
-    #         lca_profile = os.path.join(
-    #             config["output"]["classifier"],"bwa_align/{sample}/Aligned.BWA.sortedByCoord.out.sam2lca.csv"),
-    #         lca_bam = os.path.join(
-    #             config["output"]["classifier"],"bwa_align/{sample}/Aligned.BWA.sortedByCoord.out.sam2lca.bam"), 
-    #     params:
-    #         bwa_output = os.path.join(
-    #             config["output"]["classifier"],"bwa_align","{sample}"),
-    #         sam2lca_script = config["scripts"]["sam2lca"],
-    #         project = config["params"]["project"],
-    #     resources:
-    #         mem_mb=config["resources"]["krak2_matrix_build"]["mem_mb"]
-    #     benchmark:
-    #         os.path.join(config["benchmarks"]["classifier"],
-    #             "bwa/{sample}/bwa_assigned.tsv")
-    #     conda:
-    #         config["envs"]["kmer_python"]
-    #     log:
-    #         os.path.join(config["logs"]["classifier"],
-    #                     "sam2lca/{sample}_sam2lca.log")
-    #     shell:
-    #         """
-    #         python {params.sam2lca_script} --input {input.bwa_aligned_sorted_mapped_bam} --output_bam {output.lca_bam} --output_tsv {output.lca_profile} --nodes {input.nodes_dump} --names {input.names_dump} --seqid_taxid_tsv {input.acc2tax}  --verbose --log_file {log}
-    #         """
-    # rule bwa2_matrix_build:
-    #     input:
-    #         lca_bam = os.path.join(
-    #             config["output"]["classifier"],"bwa_align/{sample}/Aligned.BWA.sortedByCoord.out.sam2lca.bam"),
-    #         unmapped_bam_sorted_file =os.path.join(
-    #             config["output"]["host"],
-    #             "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam"),
-    #         names_dump = os.path.join(
-    #         config["params"]["align"]["download_dir"],
-    #         "taxonomy/names.dmp"),
-    #         nodes_dump = os.path.join(
-    #         config["params"]["align"]["download_dir"],
-    #         "taxonomy/nodes.dmp"),   
-    #     output:
-    #         profile_tsv = os.path.join(
-    #             config["output"]["profile"],
-    #             "{sample}/microbiome_out/microbiome_profile.tsv"), 
-    #         barcode_file = os.path.join(
-    #             config["output"]["profile"],
-    #             "{sample}/microbiome_out/barcodes.tsv"),
-    #         matrix_file = os.path.join(
-    #             config["output"]["profile"],
-    #             "{sample}/microbiome_out/matrix.mtx"),
-    #         feature_file = os.path.join(
-    #             config["output"]["profile"],
-    #             "{sample}/microbiome_out/features.tsv"),
-    #     params:
-    #         bam2mtx_script = config["scripts"]["bam2mtx"],
-    #     resources:
-    #         mem_mb=config["resources"]["krak2_matrix_build"]["mem_mb"]
-    #     log:
-    #         os.path.join(config["logs"]["classifier"],
-    #                     "matrix/{sample}_martix_build.log")
-    #     conda:
-    #         config["envs"]["kmer_python"]
-    #     shell:
-    #         """
-    #         python {params.bam2mtx_script} --cb_bam {input.unmapped_bam_sorted_file} --align_bam {input.lca_bam} --nodes {input.nodes_dump} --names {input.names_dump} --profile_tsv {output.profile_tsv} --matrixfile {output.matrix_file} --cellfile {output.barcode_file} --taxfile {output.feature_file}  --log_file {log}
-    #         """
+            """
+            python {params.em_script} \
+            --bam_file {input.bwa_aligned_sorted_mapped_bam} \
+            --taxonomy_file {input.acc2tax} \
+            --output {output.em_reads_assign_tsv} \
+            --log_file {log}
+            """
+    rule bwa2_matrix_build:
+        input:
+            em_reads_assign_tsv = os.path.join(
+                config["output"]["classifier"],"bwa_align/{sample}/Aligned.BWA.sortedByCoord.out.em_reads_assign.tsv"),
+            unmapped_bam_sorted_file =os.path.join(
+                config["output"]["host"],
+                "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam"),
+            names_dump = os.path.join(
+            config["params"]["align"]["download_dir"],
+            "taxonomy/names.dmp"),
+            nodes_dump = os.path.join(
+            config["params"]["align"]["download_dir"],
+            "taxonomy/nodes.dmp"),   
+        output:
+            profile_tsv = os.path.join(
+                config["output"]["profile"],
+                "{sample}/microbiome_out/microbiome_profile.tsv"), 
+            barcode_file = os.path.join(
+                config["output"]["profile"],
+                "{sample}/microbiome_out/barcodes.tsv"),
+            matrix_file = os.path.join(
+                config["output"]["profile"],
+                "{sample}/microbiome_out/matrix.mtx"),
+            feature_file = os.path.join(
+                config["output"]["profile"],
+                "{sample}/microbiome_out/features.tsv"),
+        params:
+            bam2mtx_script = config["scripts"]["bam2mtx"],
+        resources:
+            mem_mb=config["resources"]["krak2_matrix_build"]["mem_mb"]
+        log:
+            os.path.join(config["logs"]["classifier"],
+                        "matrix/{sample}_martix_build.log")
+        conda:
+            config["envs"]["kmer_python"]
+        shell:
+            """
+            python {params.bam2mtx_script} --cb_bam {input.unmapped_bam_sorted_file} --align_bam {input.lca_bam} --nodes {input.nodes_dump} --names {input.names_dump} --profile_tsv {output.profile_tsv} --matrixfile {output.matrix_file} --cellfile {output.barcode_file} --taxfile {output.feature_file}  --log_file {log}
+            """
     rule bwa2_aligned_all:
         input:
             # expand(os.path.join(
             #     config["output"]["profile"],
             #     "{sample}/microbiome_out/microbiome_profile.tsv"),sample=SAMPLES_ID_LIST)
             expand(os.path.join(
-                config["output"]["profile"],
-                "{sample}/microbiome_out/microbiome_species.tsv"),sample=SAMPLES_ID_LIST)
+                config["output"]["classifier"],"bwa_align/{sample}/Aligned.BWA.sortedByCoord.out.sam2lca.csv"),sample=SAMPLES_ID_LIST)
 else:
     rule bwa2_aligned_all:
         input:
