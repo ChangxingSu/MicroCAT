@@ -627,12 +627,12 @@
 
       }
     ],
-    "description": "User custom",
+    "description": "User_custom",
     "soloType": "CB_UMI_Simple",
     "soloStrand": "Forward",
     "outSAMtype": "BAM SortedByCoordinate",
     "outSAMattributes": "NH HI AS nM CB UB CR CY UR UY GX GN",
-    "name": "User custom",
+    "name": "User_custom",
     "algorithm": [
       {
         "soloUMIdedup": "1MM_CR",
