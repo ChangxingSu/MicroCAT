@@ -460,6 +460,7 @@ parser = argparse.ArgumentParser(description='执行EM算法进行物种丰度�
 parser.add_argument('--bam_file', required=True, help='BAM文件路径')
 parser.add_argument('--taxonomy_file', required=True, help='分类文件路径')
 parser.add_argument('--output', required=True, help='输出文件路径')
+parser.add_argument('--names_dmp_file', required=True, help='names dump file')
 # parser.add_argument('--log_level', default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], help='日志级别')
 parser.add_argument('--log_file', default='emu_em.log', help='日志文件路径')
 parser.add_argument('--verbose', action='store_true', help='是否输出详细日志信息')
@@ -595,7 +596,7 @@ def parse_names_dmp(file_path):
     return tax_id_to_name
 
 
-names_dmp_file = "/data/comics-sucx/database/microcat/taxonomy/names.dmp"
+names_dmp_file = args.names_dmp_file
 
 # 解析names.dmp文件
 tax_id_to_name = parse_names_dmp(names_dmp_file)

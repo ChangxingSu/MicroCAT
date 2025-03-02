@@ -567,6 +567,7 @@ if config["params"]["align"]["bwa2"]["do"]:
             --bam_file {input.bwa_aligned_sorted_mapped_bam} \
             --taxonomy_file {input.acc2tax} \
             --output {output.em_reads_assign_tsv} \
+            --names_dmp_file {input.names_dump} \
             --log_file {log}
             """
     rule bwa2_matrix_build:
