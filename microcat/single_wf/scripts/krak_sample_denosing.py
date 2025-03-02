@@ -628,9 +628,11 @@ def main():
     
     # filter desired_krak_report
     # TODO: each superkingdom have different min_read_fraction
+    # TODO: MAX COVERAGE
     filter_desired_krak_report = final_desired_krak_report.copy()[
             (
             (final_desired_krak_report['max_minimizers'] > 5) &
+            (final_desired_krak_report['dup'] < 100) &
             (
                 (
                     ((final_desired_krak_report['superkingdom'] == '2') &
