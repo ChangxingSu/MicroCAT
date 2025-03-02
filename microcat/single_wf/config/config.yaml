@@ -209,3 +209,4 @@ scripts:
   extract_kraken_fastq         : scripts/extract_specific_kraken_reads.py
   sam2lca                      : scripts/sam2lca.py
   bam2mtx                      : scripts/bam2mtx.py
+  em_script                    : scripts/em.py
