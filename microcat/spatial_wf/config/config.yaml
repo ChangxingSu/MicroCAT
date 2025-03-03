@@ -15,15 +15,30 @@ params:
         unknown-slide: true
       probe_set: ""
       variousParams: ""
+    # TODO: add saw parameters
+    saw:
+      do: false
+    # TODO: add st pipeline parameters
+    st_pipeline:
+      do: false
 
+  ## Taxonomic classification parameters  
   classifier:
     kraken2uniq:
-      do: true
-      kraken2_database: "/path/to/kraken2_database"
-      minimum_hit: 3
-      confidence: 0
-      variousParams: ""
-
+      do                       : true  # Whether to run kraken2uniq for classification
+      kraken2_database         : "/data/database/kraken2uniq_database/k2_pluspf_20231009" # Path for kraken2 database
+      minimum_hit              : 3
+      confidence               : 0
+      variousParams            : "" # Other kraken2 parameters
+    krak_sample_denosing:
+      min_frac                 : 0.5
+      kmer_len                 : 35
+      min_dust                 : 0.05
+      min_entropy              : 1.2
+    krak_study_denosing:
+      min_reads                : 2
+      min_uniq                 : 2
+      cell_line                : /data/project/host-microbiome/microcat/microcat/single_wf/data/cell.lines.txt
   align:
     download_dir: ""
     bowtie2:
@@ -38,40 +53,107 @@ params:
     minimap2:
       do: false
       db: ""
-
-output:
-  raw: results/00.raw
-  host: results/02.host
-  classifier: results/03.classifier
-
-logs:
-  prepare: "logs/00.prepare"
-  host: "logs/02.host"
-  classifier: "logs/03.classifier"
-
-benchmarks:
-  host: "benchmarks/02.host"
-  classifier: "benchmarks/03.classifier"
-
-envs:
-  kraken2: ../envs/kraken2.yaml
-  star: ../envs/star.yaml
-  bwa2: ../envs/bwa2.yaml
-
+# Compute resource requirements
 resources:
-  spaceranger:
-    threads: 20
-    mem_mb: 100000
+  spaceranger:  
+    threads                    : 40        # Number of threads for Space Ranger
+    mem_mb                     : 100000     # Memory in MB for Space Ranger
+  starsolo:
+    threads                    : 20        # Number of threads for STARsolo 
+    mem_mb                     : 100000     # Memory in MB for STARsolo
   samtools_extract:
-    threads: 20
-    mem_mb: 40000
+    threads                    : 20        # Number of threads for samtools
+    mem_mb                     : 40000      # Memory in MB for samtools
+  paired_bam_to_fastq:
+    threads                    : 20        # Number of threads for paired_bam_to_fastq
+    mem_mb                     : 40000      # Memory in MB for paired_bam_to_fastq
+  rmhost:
+    threads                    : 20        # Number of threads for rmhost
+    mem_mb                     : 45000      # Memory in MB for rmhost
   kraken2uniq:
-    threads: 20
-    mem_mb: 120000
+    threads                    : 20        # Number of threads for kraken2uniq
+    mem_mb                     : 120000     # Memory in MB for kraken2uniq
+  krakenuniq:
+    threads                    : 40        # Number of threads for krakenuniq
+    mem_mb                     : 100000     # Memory in MB for krakenuniq
+  metaphlan4:
+    threads                    : 20        # Number of threads for metaphlan
+    mem_mb                     : 100000     # Memory in MB for metaphlan
+  pathseq:
+    threads                    : 24        # Number of threads for pathseq  
+    mem_mb                     : 200000     # Memory in MB for pathseq
+  cellbender:
+    threads                    : 20
+    mem_mb                     : 20000     # Memory in MB for krak_sample_denosing
+  extract_kraken2_classified_output:
+    threads                    : 1
+    mem_mb                     : 4000     # Memory in MB for   
+  extract_kraken2_classified_bam:
+    threads                    : 1
+    mem_mb                     : 4000     # Memory in MB 
+  krak_sample_denosing:
+    threads                    : 1
+  krak2_matrix_build:
+    threads                    : 1
+    mem_mb                     : 4000     # Memory in MB for krak_sample_denosing
+  bwa2:
+    threads                    : 20        # Number of threads for bwa2
+  download_candidate_species:
+    threads                    : 20        # Number of threads for download_candidate_species
+#######################################################################################
+# Output directory settings
+output:
+  simulate                     : results/00.simulate    # Output folder for simulation
+  raw                          : results/00.raw         # Output folder for raw data
+  trimming                     : results/01.trimming    # Output folder for trimmed reads
+  host                         : results/02.host        # Output folder for host alignment
+  classifier                   : results/03.classifier      # Output folder for taxonomy classification
+  profile                      : results/04.profile     # Output folder for profile
 
+#######################################################################################  
+# Log directory settings
+logs:
+  prepare                      : "logs/00.prepare"       # Log folder for data preparation
+  host                         : "logs/02.host"             # Log folder for host alignment
+  classifier                   : "logs/03.classifier" # Log folder for taxonomy classification
+  profile                      : "logs/04.profile"      # Output folder for taxonomy classification
+
+#######################################################################################
+# Benchmark directory settings  
+benchmarks:
+  host                         : "benchmarks/02.host"       # Benchmark folder for host alignment
+  classifier                   : "benchmarks/03.classifier" # Benchmark folder for taxonomy classification
+  profile                      : "benchmarks/04.profile" # Benchmark folder for taxonomy 
+
+#######################################################################################
+# Conda environment settings
+envs:
+  kraken2                      : ../envs/kraken2.yaml       # kraken2 conda environment
+  krakenuniq                   : ../envs/krakenuniq.yaml # krakenuniq conda environment
+  pathseq                      : ../envs/pathseq.yaml       # pathseq conda environment
+  metaphlan                    : ../envs/metaphlan.yaml   # metaphlan conda environment
+  kmer_qc                      : ../envs/kmer_qc.yaml       # kmer_qc conda environment
+  kmer_python                  : ../envs/kmer_python.yaml # kmer_python conda environment 
+  star                         : ../envs/star.yaml             # STAR conda environment
+  bwa2                         : ../envs/bwa2.yaml             # BWA MEM 2 conda environment
+
+#######################################################################################
+# Custom scripts
 scripts:
-  extract_kraken_output: scripts/extract_kraken_output.py
-  extract_kraken_bam: scripts/extract_kraken_bam.py
-  kraken2mpa: scripts/kraken2mpa.py
-  extract_kraken_reads: scripts/extract_kraken_reads.py
-  preprocess_raw: scripts/preprocess_raw.py
+  extract_kraken_output        : scripts/extract_kraken_output.py # Extract read assignments from kraken2 output
+  extract_kraken_bam           : scripts/extract_kraken_bam.py # Extract read assignments from kraken2 output
+  kraken2mpa                   : scripts/kraken2mpa.py # Convert kraken2 output to mpa format
+  kraken2sc                    : scripts/kraken2sc.py # Convert kraken2 output to silvacompatible format
+  extract_kraken_reads         : scripts/extract_kraken_reads.py # Extract classified reads from kraken2 output
+  krak_sample_denosing         : scripts/krak_sample_denosing.py # Sample-level denoising 
+  krak_study_denosing          : scripts/krak_study_denosing.py # Study-level denoising
+  starsolo_10X_auto            : scripts/starsolo_tenX_auto.sh # Wrapper script for STARsolo 10x pipeline
+  bam2fastq                    : scripts/paired_bam_to_fastq_script.sh # Wrapper script for bam convert to fastq
+  kraken2sc_rg                 : scripts/kraken2sc_rg.py # Convert kraken2 output to silvacompatible format
+  leiden_pre_cluster           : scripts/leidan_cellbender_clsuter.py # cluster cellbender
+  ledian_cluster_noncellbender : scripts/ledian_cluster_nonfilter.py # cluster cellbender
+  download_candidate_species   : scripts/download_interest_refseq.py
+  extract_kraken_fastq         : scripts/extract_specific_kraken_reads.py
+  sam2lca                      : scripts/sam2lca.py
+  bam2mtx                      : scripts/bam2mtx.py
+  em_script                    : scripts/em.py
