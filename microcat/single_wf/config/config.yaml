@@ -101,6 +101,9 @@ params:
     minimap2:
       do: False
       db: ""
+    mm2plus:
+      do: False
+      db: ""
 # Compute resource requirements
 resources:
   cellranger:  

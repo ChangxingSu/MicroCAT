@@ -251,7 +251,7 @@ def init():
               default='bwa2',
               help='Which align used',
               show_choices=True,
-              type=click.Choice(['bowtie2',"bwa","minimap2","bwa2"], case_sensitive=False),
+              type=click.Choice(['bowtie2',"bwa","minimap2","bwa2","mm2plus"], case_sensitive=False),
               prompt='Select classifier software you use')
 @click.option('--cellbender',help='Use CellBender for single-cell environment RNA filtering', is_flag=True, default=False)
 @click.option('--gpu',help='Use GPU for CellBender acceleration (enabled only if --cellbender is true)', is_flag=True, default=False)
@@ -364,7 +364,7 @@ def single_init(
             else:
                 conf["params"]["classifier"][classifier_]["do"] = False
 
-        for align_ in ["bwa","bwa2","bowtie2","minimap2"]:
+        for align_ in ["bwa","bwa2","bowtie2","minimap2","mm2plus"]:
             if align_ == align:
                 conf["params"]["align"][align_]["do"] = True
             else:
