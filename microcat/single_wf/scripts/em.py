@@ -196,7 +196,7 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
     return log_p_rgs, unassigned_count, len(assigned_reads)
 
 
-def expectation_maximization_iterations(log_p_rgs, freq, lli_thresh, input_threshold):
+def expectation_maximization_iterations(log_p_rgs, freq, lli_thresh, input_threshold, save_iterations=None):
     """
     执行EM算法迭代，包含迭代质量保持阈值步骤以解决长尾效应
     
@@ -205,15 +205,20 @@ def expectation_maximization_iterations(log_p_rgs, freq, lli_thresh, input_thres
         freq: 初始物种丰度估计
         lli_thresh: 对数似然增量阈值
         input_threshold: 物种丰度阈值
+        save_iterations: 需要保存结果的迭代次数列表，例如[1,5,10,15,20]，默认为None
     
     Returns:
         freq_full: 所有物种的丰度
         freq_set_thresh: 经过阈值处理后的物种丰度
         p_sgr: 读段-物种分配概率字典
+        iteration_results: 保存的迭代结果字典 {迭代次数: {物种ID: 丰度}}
     """
     n_reads = len(log_p_rgs)
     if n_reads == 0:
-        return freq, freq, {}
+        return freq, freq, {}, {}
+    
+    # 初始化用于保存迭代结果的字典
+    iteration_results = {}
     
     # 初始化物种有效性标记
     strain_valid = {strain: True for strain in freq}
@@ -237,6 +242,8 @@ def expectation_maximization_iterations(log_p_rgs, freq, lli_thresh, input_thres
             freq[g] = 1e-10  # 设置一个非常小但非零的值
     
     while True:
+        counter += 1
+        
         # 判断是否执行阈值处理
         if counter % thresholding_iter_step == 0 and can_help:
             strain_valid, potentially_removable, can_help = apply_set_cover(
@@ -323,12 +330,31 @@ def expectation_maximization_iterations(log_p_rgs, freq, lli_thresh, input_thres
                 else:
                     freq[g] = 0
         
+        # 保存当前迭代的结果（如果需要）
+        if save_iterations is not None and counter in save_iterations:
+            # 创建一个副本以避免引用问题
+            current_freq = freq.copy()
+            # 对频率进行归一化处理
+            sum_freq = sum(v for v in current_freq.values())
+            if sum_freq > 0:
+                current_freq = {k: v/sum_freq for k, v in current_freq.items()}
+            # 保存当前迭代结果
+            iteration_results[counter] = current_freq
+            logger.info(f"保存第{counter}次迭代结果", status="done")
+        
         # 检查收敛性
         if abs(log_likelihood - prev_log_likelihood) < lli_thresh:
+            # 如果最后一次迭代不在save_iterations中，保存它
+            if save_iterations is not None and counter not in save_iterations:
+                current_freq = freq.copy()
+                sum_freq = sum(v for v in current_freq.values())
+                if sum_freq > 0:
+                    current_freq = {k: v/sum_freq for k, v in current_freq.items()}
+                iteration_results["final"] = current_freq
+                logger.info(f"保存最终迭代结果（第{counter}次）", status="done")
             break
         
         prev_log_likelihood = log_likelihood
-        counter += 1
     
     # 最终过滤结果
     freq_full = freq.copy()
@@ -339,7 +365,7 @@ def expectation_maximization_iterations(log_p_rgs, freq, lli_thresh, input_thres
     if total > 0:
         freq_set_thresh = {k: v/total for k, v in freq_set_thresh.items()}
     
-    return freq_full, freq_set_thresh, p_sgr
+    return freq_full, freq_set_thresh, p_sgr, iteration_results
 
 
 def apply_set_cover(log_p_rgs, freq, strain_valid, min_count):
@@ -460,10 +486,12 @@ parser = argparse.ArgumentParser(description='执行EM算法进行物种丰度�
 parser.add_argument('--bam_file', required=True, help='BAM文件路径')
 parser.add_argument('--taxonomy_file', required=True, help='分类文件路径')
 parser.add_argument('--output', required=True, help='输出文件路径')
-parser.add_argument('--names_dmp_file', required=True, help='names dump file')
+parser.add_argument('--ktaxonomy_file', required=True, help='Kraken2 ktaxonomy file')
 # parser.add_argument('--log_level', default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], help='日志级别')
 parser.add_argument('--log_file', default='emu_em.log', help='日志文件路径')
 parser.add_argument('--verbose', action='store_true', help='是否输出详细日志信息')
+parser.add_argument('--save_iterations', type=str, help='要保存的迭代结果，逗号分隔的数字，例如 "1,5,10,15,20"')
+parser.add_argument('--iteration_output', help='迭代结果输出目录')
 args = parser.parse_args()
 
 # Set log level based on command line arguments
@@ -536,9 +564,17 @@ print("Assigned read count: {}\n".format(n_reads))
 
 freq, counter = dict.fromkeys(db_ids, 1 / n_db), 1
 
+# 处理迭代保存参数
+if args.save_iterations:
+    save_iterations = [int(x) for x in args.save_iterations.split(',')]
+    logger.info(f"将保存以下迭代次数的结果: {save_iterations}")
+else:
+    save_iterations = None
+
+# 运行EM算法并获取迭代结果
 logger.info('Running EM algorithm', status='run')
-f_full, f_set_thresh, read_dist = expectation_maximization_iterations(log_prob_rgs,
-                                                                      freq, 0.01, 0.00001)
+f_full, f_set_thresh, read_dist, iteration_results = expectation_maximization_iterations(
+    log_prob_rgs, freq, 0.01, 0.00001, save_iterations)
 
 print(f"Number of EM iterations: {counter}\n")
 print(f"Number of species in f_full: {len(f_full)}")
@@ -582,25 +618,13 @@ for read_name, tax_probs in read_dist.items():
     if best_tax_id is not None:
         best_classifications[read_name] = (best_tax_id, best_prob)
 
-# get the taxonomy name from the taxonomy id
-def parse_names_dmp(file_path):
-    tax_id_to_name = {}
-    with open(file_path, 'r') as f:
-        for line in f:
-            fields = line.strip().split('|')
-            tax_id = int(fields[0].strip())
-            name = fields[1].strip()
-            name_class = fields[3].strip()
-            if name_class == 'scientific name':
-                tax_id_to_name[tax_id] = name
-    return tax_id_to_name
 
-
-names_dmp_file = args.names_dmp_file
-
-# 解析names.dmp文件
-tax_id_to_name = parse_names_dmp(names_dmp_file)
-
+# a very simple taxonomy name parser
+tax_id_to_name = {}
+with open(args.ktaxonomy_file, 'r') as kfile:
+    for line in kfile:
+        [taxid, p_tid, rank, lvl_num, name] = line.strip().split('\t|\t')
+        tax_id_to_name[taxid] = name
 
 # 将结果写入文件
 logger.info(f"开始将read分类结果写入文件: {read_classifications_file}")
@@ -614,4 +638,20 @@ with open(output, 'w', newline='') as f:
         tax_genus = tax_name.split(" ")[0] if tax_name != "Unknown" else "Unknown"
         writer.writerow([read_name, tax_id, prob, tax_name, tax_genus])
 
+
+# 如果指定了迭代输出目录，则保存每个迭代的结果
+if args.iteration_output and save_iterations:
+    os.makedirs(args.iteration_output, exist_ok=True)
+    for iter_num, iter_freq in iteration_results.items():
+        iter_output_file = os.path.join(args.iteration_output, f"em_iteration_{iter_num}.tsv")
+        # 将迭代结果转换为DataFrame并保存
+        iter_df = pd.DataFrame([(tax_id, abundance) for tax_id, abundance in iter_freq.items() if abundance > 0],
+                                columns=["tax_id", "abundance"])
+        
+        # 添加物种名称
+        iter_df["species"] = iter_df["tax_id"].apply(lambda x: tax_id_to_name.get(x, "Unknown"))
+        iter_df.sort_values("abundance", ascending=False, inplace=True)
+        
+        iter_df.to_csv(iter_output_file, sep="\t", index=False)
+        logger.info(f"保存迭代{iter_num}的结果到: {iter_output_file}", status="done")
 logger.info(f"Read分类结果已保存到文件: {read_classifications_file}")
