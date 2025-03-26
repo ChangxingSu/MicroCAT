@@ -101,55 +101,55 @@ rule paired_bam_to_fastq:
         '''
         bash {params.bam2fastq_script} {input.unmapped_bam_sorted_file} {output.unmapped_r1_fastq} {output.unmapped_r2_fastq} {output.unmapped_fastq} {threads}
         '''
-rule bwa_remove_host:
-    input:
-        unmapped_fastq = os.path.join(
-            config["output"]["host"],
-            "unmapped_host/{sample}/{sample}_unmappped2human_bam.fastq"),
-        unmapped_r1_fastq = os.path.join(
-            config["output"]["host"],
-            "unmapped_host/{sample}/{sample}_unmappped2human_bam_r1.fastq"),
-        unmapped_r2_fastq = os.path.join(
-            config["output"]["host"],
-            "unmapped_host/{sample}/{sample}_unmappped2human_bam_r2.fastq")
-    output:
-        rmhost_fastq = os.path.join(
-            config["output"]["host"],
-            "unmapped_host/{sample}/{sample}_bwa_rmhost.fastq"),
-        rmhost_r1_fastq = os.path.join(
-            config["output"]["host"],
-            "unmapped_host/{sample}/{sample}_bwa_rmhost_r1.fastq"),
-        rmhost_r2_fastq = os.path.join(
-            config["output"]["host"],
-            "unmapped_host/{sample}/{sample}_bwa_rmhost_r2.fastq"),
-    params:
-        host_index = config["params"]["align"]["bwa2"]["host_db"],
-        rmhost_bam = os.path.join(
-            config["output"]["host"],
-            "unmapped_host/{sample}/{sample}_rmhost.bam")
-    log:
-        os.path.join(config["logs"]["classifier"],
-                    "bwa_rmhost/{sample}_rmhost.log")
-    threads:
-        config["resources"]["rmhost"]["threads"]
-    resources:
-        mem_mb=config["resources"]["rmhost"]["mem_mb"]
-    priority: 11
-    conda:
-        config["envs"]["star"]
-    shell:
-        '''
-        if [ -s "{input.unmapped_fastq}" ]; then
-            bwa-mem2 mem -t {threads} {params.host_index} {input.unmapped_fastq} | samtools view --threads {threads} -b -f 4 > {params.rmhost_bam} ;\
-            samtools fastq --threads {threads} -n {params.rmhost_bam} > {output.rmhost_fastq};  \
-            touch {output.rmhost_r1_fastq} ;\
-            touch {output.rmhost_r2_fastq} ;
-        else
-            bwa-mem2 mem -t {threads} -p {params.host_index} {input.unmapped_r1_fastq} {input.unmapped_r2_fastq} | samtools view --threads {threads} -b -f12 > {params.rmhost_bam} ;\
-            samtools fastq --threads {threads}  -n {params.rmhost_bam} -1 {output.rmhost_r1_fastq} -2 {output.rmhost_r2_fastq}; \
-            touch {output.rmhost_fastq};
-        fi
-        '''
+# rule bwa_remove_host:
+#     input:
+#         unmapped_fastq = os.path.join(
+#             config["output"]["host"],
+#             "unmapped_host/{sample}/{sample}_unmappped2human_bam.fastq"),
+#         unmapped_r1_fastq = os.path.join(
+#             config["output"]["host"],
+#             "unmapped_host/{sample}/{sample}_unmappped2human_bam_r1.fastq"),
+#         unmapped_r2_fastq = os.path.join(
+#             config["output"]["host"],
+#             "unmapped_host/{sample}/{sample}_unmappped2human_bam_r2.fastq")
+#     output:
+#         rmhost_fastq = os.path.join(
+#             config["output"]["host"],
+#             "unmapped_host/{sample}/{sample}_bwa_rmhost.fastq"),
+#         rmhost_r1_fastq = os.path.join(
+#             config["output"]["host"],
+#             "unmapped_host/{sample}/{sample}_bwa_rmhost_r1.fastq"),
+#         rmhost_r2_fastq = os.path.join(
+#             config["output"]["host"],
+#             "unmapped_host/{sample}/{sample}_bwa_rmhost_r2.fastq"),
+#     params:
+#         host_index = config["params"]["align"]["bwa2"]["host_db"],
+#         rmhost_bam = os.path.join(
+#             config["output"]["host"],
+#             "unmapped_host/{sample}/{sample}_rmhost.bam")
+#     log:
+#         os.path.join(config["logs"]["classifier"],
+#                     "bwa_rmhost/{sample}_rmhost.log")
+#     threads:
+#         config["resources"]["rmhost"]["threads"]
+#     resources:
+#         mem_mb=config["resources"]["rmhost"]["mem_mb"]
+#     priority: 11
+#     conda:
+#         config["envs"]["star"]
+#     shell:
+#         '''
+#         if [ -s "{input.unmapped_fastq}" ]; then
+#             bwa-mem2 mem -t {threads} {params.host_index} {input.unmapped_fastq} | samtools view --threads {threads} -b -f 4 > {params.rmhost_bam} ;\
+#             samtools fastq --threads {threads} -n {params.rmhost_bam} > {output.rmhost_fastq};  \
+#             touch {output.rmhost_r1_fastq} ;\
+#             touch {output.rmhost_r2_fastq} ;
+#         else
+#             bwa-mem2 mem -t {threads} -p {params.host_index} {input.unmapped_r1_fastq} {input.unmapped_r2_fastq} | samtools view --threads {threads} -b -f12 > {params.rmhost_bam} ;\
+#             samtools fastq --threads {threads}  -n {params.rmhost_bam} -1 {output.rmhost_r1_fastq} -2 {output.rmhost_r2_fastq}; \
+#             touch {output.rmhost_fastq};
+#         fi
+#         '''
 if config["params"]["classifier"]["kraken2uniq"]["do"]:
     rule kraken2uniq_classified:
         input:
