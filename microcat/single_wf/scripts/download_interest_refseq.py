@@ -1,23 +1,21 @@
 """
-This script is used to download sequences from a certain domain that are present in NCBI refseq (ftp://ftp.ncbi.nlm.nih.gov/genomes/refseq/).
+This script is used to download sequences from a certain domain that are present in NCBI refseq.
+It downloads sequences based on a kraken2 library report and candidate species list.
 It requires the additional packages pandas and Biopython.
 
-The script downloads the assembly summary file and creates a log file that indicates whether each sequence was downloaded or not.
-
 Command line arguments:
-    --complete: Choose whether to only download complete genomes or all genomes. Default is True, meaning only complete genomes are downloaded.
-    --candidate: Candidate species.
-    --library_report: Library report.
-    --seqid2taxid: Seqid to taxid.
-    --library_fna: Library FNA file.
+    --library_report: Library report file path.
+    --candidate_species: Candidate species file path.
+    --seqid2taxid: Seqid to taxid map file path.
+    --library_fna: Library FNA file path.
     --project: Project name.
-    --interest_fna: Interest FNA file.
-    --acc2tax: Accession to TAXID databases.
-    --folder: Name of the folder to download the genomes to. If the folder already exists, the genomes will be added to it. By default, this is "ncbi_genomes".
+    --interest_fna: Interest FNA file path.
+    --acc2tax: Accession to TAXID database output path.
+    --folder: Name of the folder to download the genomes to. Default is "ncbi_genomes".
     --log_file: File to write the log to. Default is "logfile_download_genomes.txt".
     --verbose: Enable detailed print.
-    --processors: Number of processors to use for renaming genome files. Default is 1.
-
+    --processors: Number of processors to use for downloading. Default is 1.
+    --max_urls_per_taxid: Maximum number of URLs per taxid. Default is 10.
 """
 
 #!/usr/bin/env python3
@@ -29,10 +27,8 @@ import sys
 import logging
 from Bio import SeqIO
 import gzip
-import json
 import subprocess
 import requests
-import json
 from multiprocessing import Pool
 from multiprocessing import freeze_support
 # Create a logger object
@@ -60,120 +56,110 @@ logger.warning = lambda msg, *args, status=None: custom_log(logging.WARNING, msg
 logger.error = lambda msg, *args, status=None: custom_log(logging.ERROR, msg, *args, status=status)
 logger.debug = lambda msg, *args, status=None: custom_log(logging.DEBUG, msg, *args, status=status)
 
-
-def select_genomes(group):
-    # First get genome from subspecies
-    filtered_genomes = group[group["acc"].isin(specifice_genome_list)].head(5)
-
-    priority_categories = ['representative genome', 'reference genome']
+def download_with_requests(url, local_file):
+    """Download a file using requests with streaming to save memory.
     
-    remaining_needed = 5 - len(filtered_genomes)
-    if len(filtered_genomes) >= 3:
-        represent_genomes = group[group['refseq_category'].isin(priority_categories)].head(2)
-    else:
-        represent_genomes = group[group['refseq_category'].isin(priority_categories)].head(5)
+    Parameters
+    ----------
+    url : str
+        URL to download from
+    local_file : str
+        Path to save the file to
         
-    filtered_genomes = pd.concat([filtered_genomes, represent_genomes])
-    remaining_needed = 5 - len(filtered_genomes)
-
-    if remaining_needed > 0:
-        # 如果找到的基因组不足5个，先从包含 'FDAARGOS' 的基因组中选择
-        contains_fdaargos = group[group['infraspecific_name'].str.contains('FDAARGOS', na=False)]
-        fdaargos_filtered = contains_fdaargos[~contains_fdaargos.index.isin(filtered_genomes.index)]
-        filtered_genomes = pd.concat([filtered_genomes, fdaargos_filtered.head(remaining_needed)])
-
-        remaining_needed = 5 - len(filtered_genomes)
-
-        if remaining_needed > 0:
-            # 如果包含 'FDAARGOS' 的基因组仍不足5个，从剩余基因组中继续选择，按照指定的排序条件
-            remaining_genomes = group[~group.index.isin(filtered_genomes.index)]
-            sorted_remaining_genomes = remaining_genomes.sort_values(by=['assembly_level', '#assembly_accession']).head(remaining_needed)
-            filtered_genomes = pd.concat([filtered_genomes, sorted_remaining_genomes])
-
-    return filtered_genomes
+    Returns
+    -------
+    bool
+        True if download was successful, False otherwise
+    """
+    # TODO: add md5 check
+    try:
+        response = requests.get(url, stream=True)
+        response.raise_for_status()  # Raise an exception for 4XX/5XX responses
+        
+        with open(local_file, 'wb') as handle:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:  # Filter out keep-alive chunks
+                    handle.write(chunk)
+        return True
+    except Exception as e:
+        logger.error(f"Error downloading {url}: {e}")
+        return False
     
-def download_genomes(acc):
-    download =False
-    if complete:
-            # if assembly_summaries.loc[acc,'assembly_level'] != 'Complete Genome':
-            if assembly_summaries.loc[acc,'assembly_level'] != 'Complete Genome' and assembly_summaries.loc[acc,'assembly_level'] != 'Chromosome':
-                logger.error(f"Didn get {acc} because it wasn't complete or Chromosom") 
-                return
-            
-    if acc not in existing_sequences:
-        try:
-            ftp_path = assembly_summaries.loc[acc, 'ftp_path']
-            aname = ftp_path.split('/')[-1]+'_genomic.fna.gz'
-            file_path = os.path.join(download_folder,aname)
-            ftp_path = ftp_path + "/" + aname
+def download_genome(row):
+    """Only responsible for downloading genomes, not handling writing"""
+    download = False
+    seqid = row['seqid']
+    taxid = row['taxid']
+    accession = row['accession']
+    fna_ftp_path = row['URL']
+
+    try:
+        gff_ftp_path = fna_ftp_path.replace('genomic.fna.gz', 'genomic.gff.gz')
+        fna_http_path = fna_ftp_path.replace('ftp://', 'http://')
+        gff_http_path = gff_ftp_path.replace('ftp://', 'http://')
+        # Lookup using base_acc for the ftp_path
+        fna_name = fna_ftp_path.split('/')[-1]
+        gff_name = gff_ftp_path.split('/')[-1]
+        fna_file_path = os.path.join(download_folder, fna_name)
+        gff_file_path = os.path.join(download_folder, gff_name)
+        
+        # Download fna file
+        if not os.path.exists(fna_file_path) or os.stat(fna_file_path).st_size == 0:
+            download = True
+        else:
+            logger.info(f"Already had {accession} as file {fna_name}", status='complete')
+        
+        if download:
+            logger.info(f"Downloading {accession} fna file", status='run')
             attempts = 0
-            
-            if not os.path.exists(file_path) or os.stat(file_path).st_size == 0:
-                download = True
-            else:
-                logger.info(f"Already had {acc} as file {aname} so didn't download it again",status='complete')
-                attempts = 4
+            while attempts < 3:
                 try:
-                    fna_file = gzip.open(file_path,'rt')
-                except:
-                    logger.error(f"Error in open {acc} :", e)
-                    download = True
-                    # remove the file
-                    if os.path.exists(file_path):
-                        os.remove(file_path)
-                        attempts = 0
-            if download:
-                while attempts < 3:
-                    try:
-                        # 构建下载命令
-                        command = ["wget", "-q", ftp_path, "-O", os.path.join(download_folder,aname)]
-                        # 执行下载命令，并检查返回码
-                        subprocess.run(command, check=True, capture_output=True, text=True)
-                        logger.info(f"Successfully downloaded {acc}", status='complete')
+                    # Replace wget with requests
+                    if download_with_requests(fna_http_path, fna_file_path):
+                        logger.info(f"Successfully downloaded {accession} fna file", status='complete')
                         break
-                    except subprocess.CalledProcessError as e:
-                        # 处理调用命令时的异常
-                        logger.error(f"Error executing download {acc} :", e)
-                        attempts += 1
-                        # 如果尝试了3次还是失败，抛出异常
-                        if attempts == 3:
-                            raise Exception(f"Failed to download {acc} after 3 attempts")
-                    except Exception as e:
-                        # 处理其他异常
-                        logger.error("Unexpected error:", e)
-                        attempts += 1
-                        # 如果尝试了3次还是失败，抛出异常
-                        if attempts == 3:
-                            raise Exception(f"Failed to download {acc} after 3 attempts")
+                    else:
+                        raise Exception("Download failed")
+                except Exception as e:
+                    logger.error(f"Error downloading {accession}: {e}")
+                    attempts += 1
+                    # if have tried 3 times, raise an exception
+                    if attempts == 3:
+                        raise Exception(f"Failed to download {accession} after 3 attempts")
 
-            taxonomy[0].append(acc), taxonomy[1].append(assembly_summaries.loc[acc, 'Taxonomy'])
-            logger.info(f'Save with {acc}', status='complete')
-            fna_file = gzip.open(file_path,'rt')
-            with open(library_fna, 'a') as library_file:
-                for record in SeqIO.parse(fna_file,"fasta"):
-                    SeqIO.write(record,library_file, "fasta")
-
-        except Exception as e:
-            logger.error(f"Error downloading {acc} : {e}")
-
-
-    else:
-        logger.info(f"Already had {acc} as file {aname} so didn't download it again",status='complete')
-    return
+        # Download gff file
+        if not os.path.exists(gff_file_path) or os.stat(gff_file_path).st_size == 0:
+            attempts = 0
+            while attempts < 3:
+                try:
+                    # Download gff file
+                    if download_with_requests(gff_http_path, gff_file_path):
+                        logger.info(f"Successfully downloaded {accession} gff file", status='complete')
+                        break
+                    else:
+                        raise Exception("Download failed")
+                except Exception as e:
+                    logger.error(f"Error downloading {accession} gff: {e}")
+                    attempts += 1
+                    # if have tried 3 times, raise an exception
+                    if attempts == 3:
+                        raise Exception(f"Failed to download {accession} after 3 attempts")
+        else:
+            logger.info(f"Already had {accession} as file {gff_name}", status='complete')
+            
+        return {'success': True, 'path': fna_file_path, 'seqid': seqid, 'taxid': taxid, 'accession': accession}
+    
+    except Exception as e:
+        logger.error(f"Error processing {accession}: {str(e)}")
+        return {'success': False, 'seqid': seqid, 'taxid': taxid, 'accession': accession}
 
 def run_multiprocessing(func, i, n_processors):
     with Pool(processes=n_processors) as pool:
         return pool.map(func, i)
 
-# def run_multiprocessing(func, existing_sequences, index_values,library_fna, n_processors):
-#     args = zip(existing_sequences, index_values,library_fna)
-#     with Pool(processes=n_processors) as pool:
-#         return pool.starmap(func, args)
 parser = argparse.ArgumentParser(description='This script is to download all sequences from a certain domain that are present in NCBI refseq (ftp://ftp.ncbi.nlm.nih.gov/genomes/refseq/).\n\
                                 This requires the additional packages pandas and Biopython\nAs long as the script is able to download the assembly summary file, then it will create a log_file that tells you about whether each sequence was downloaded or not\n\
                                 Re-running it with additional domains will by default just add these to what you already have')
-parser.add_argument('--complete', dest='complete', default=True, 
-                    help="choose whether to only download complete genomes, or all genomes. Default is False, meaning all genomes are downloaded")
 parser.add_argument('--candidate', dest='candidate', 
                     help="candidate species")
 parser.add_argument('--library_report', dest='library_report', 
@@ -195,6 +181,8 @@ parser.add_argument('--log_file', dest='log_file', default='logfile_download_gen
 parser.add_argument('--verbose', action='store_true', help='Detailed print')
 parser.add_argument('--processors', dest='proc', default=1,
                     help="Number of processors to use to rename genome files")
+parser.add_argument('--max_urls_per_taxid', dest='max_urls_per_taxid', default=5,
+                    help="Maximum number of URLs per taxid")
 
 args = parser.parse_args()
 # Set log level based on command line arguments
@@ -208,245 +196,244 @@ file_handler = logging.FileHandler(args.log_file)  # Output logs to the specifie
 file_handler.setFormatter(log_format)
 logger.addHandler(file_handler)
 
-complete = args.complete
+# Set up basic variables
 folder = args.folder
 log_file = args.log_file
 n_processors =args.proc
 library_fna = args.library_fna
-# print('Starting processing')
-domains = ['bacteria','archaea','fungi','viral']
-# 获取当前运行时的工作目录路径
-current_working_directory = os.getcwd()+"/"
-# print(f"workdir：{current_working_directory}")
+max_urls_per_taxid = args.max_urls_per_taxid
 
-logger.info('Downloading assembly summary', status='run')
-
-taxonomy_folder = os.path.join(folder, "taxonomy")
-
-# 检查 taxonomy 文件夹是否存在
-if not os.path.exists(taxonomy_folder):
-    # 如果不存在，创建它
-    os.makedirs(taxonomy_folder)
-
-assembly_summaries = []
-# os.chdir(taxonomy_folder)
-
-for domain in domains:
-    try:
-        summary = pd.read_csv(os.path.join(taxonomy_folder,str(domain)+"_assembly_summary.txt"), sep='\t', header=1, index_col=0)
-        summary = summary.loc[:, ['taxid', 'species_taxid', 'organism_name', 'assembly_level','ftp_path','infraspecific_name','refseq_category']]
-        summary['Domain'] = str(domain)
-        assembly_summaries.append(summary)
-    except (ValueError, KeyError) as e:
-        logger.error(f"Unable to read {domain}_assembly_summary.txt with {e}")
-        sys.exit()
-
-logger.info('Finished downloading interest assembly summary', status='complete')        
-assembly_summaries = pd.concat(assembly_summaries)
-logger.info('Finished Joining the assembly summaries', status='complete')   
-
-# taxid_change_log = pd.read_csv(os.path.join(taxonomy_folder,"merged.dmp"),sep="|",header=None,names=["origin","change","empty"])
-# taxid_change_log = pd.read_csv("/data/scRNA_analysis/benchmark/Galeano2022_16s/database/bowtie2/taxonomy/merged.dmp",sep="|",header=None,names=["origin","change","empty"])
-
-# summary = pd.read_csv("/data/project/host-microbiome/microcat_bowtie2/database/taxonomy/bacteria_assembly_summary.txt", sep='\t', header=1, index_col=0)
-# summary = summary.loc[:, ['taxid', 'species_taxid', 'organism_name', 'assembly_level', 'ftp_path','refseq_category']]
-
-logger.info('Downloading tax dump', status='run')  
-
-
-# if not os.path.exists(os.path.join(taxonomy_folder,'rankedlineage.dmp')) :
-
-#     try:
-#         # 下载新的 taxdump 文件
-#         download_command = ["wget", "https://ftp.ncbi.nih.gov/pub/taxonomy/new_taxdump/new_taxdump.tar.gz", "-O", os.path.join(taxonomy_folder, "new_taxdump.tar.gz")]
-#         subprocess.run(download_command, check=True)
-
-#         # 解压缩 taxdump 文件
-#         extract_command = ["tar", "-xf", os.path.join(taxonomy_folder, "new_taxdump.tar.gz"),"-C", taxonomy_folder]
-#         subprocess.run(extract_command, check=True)
-
-#         print("Download and extraction completed successfully.")
-
-#     except subprocess.CalledProcessError as e:
-#         # 处理调用命令时的异常
-#         logger.error(f"Error executing download tax dump: {e}")
-#     except Exception as e:
-#         # 处理其他异常
-#         logger.error(f"Unexpected error executing download tax dump: {e}")
-# else:
-#     logger.info("Already got full lineage", status='complete')
-
-# try:
-#     full_lineage = pd.read_csv(os.path.join(taxonomy_folder,'rankedlineage.dmp'), sep='|', header=None, index_col=0)
-#     logger.info('Got the full lineage from the current NCBI taxdump', status='complete')
-#     if os.path.exists(os.path.join(taxonomy_folder, "new_taxdump.tar.gz")): 
-#         os.remove(os.path.join(taxonomy_folder, "new_taxdump.tar.gz"))
-#         logger.info('Removed the other files from the taxdump folder', status='complete') 
-    
-# except (ValueError, KeyError) as e:
-#     logger.error(f"Couldn't get the full lineage from the current NCBI taxdump {e}")
-#     sys.exit()
-assembly_summaries['Taxonomy'] = ''
-# os.chdir(current_working_directory)
-
+# Create necessary directories
 download_folder = os.path.join(folder, "download")
-
-# 检查 taxonomy 文件夹是否存在
 if not os.path.exists(download_folder):
-    # 如果不存在，创建它
+    logger.info(f'Creating download folder {download_folder}', status='run')
     os.makedirs(download_folder)
-# os.chdir(download_folder)
 
-library_folder = os.path.join(folder, "library")
-
-# 检查 library 文件夹是否存在
-if not os.path.exists(library_folder):
-    # 如果不存在，创建它
-    os.makedirs(library_folder)
-
-candidate_species = pd.read_csv(args.candidate,sep="\t")
+# Load candidate species
+logger.info('Loading candidate species', status='run')
+candidate_species = pd.read_csv(args.candidate,sep="\t",dtype={'ncbi_taxa': str, 'main_level_taxid': str})
 candidate_species = candidate_species.sort_values(by="reads",ascending=False)
+# count the prevelence of each taxid
+candidate_species['sample_count'] = candidate_species.groupby('ncbi_taxa')['ncbi_taxa'].transform('size')
+# then remove the duplicates
 candidate_species = candidate_species[~candidate_species.duplicated(subset=['ncbi_taxa'],  keep='first')]
+logger.info(f'Loaded {len(candidate_species)} candidate species', status='complete')
 
 
-library_report = pd.read_csv(args.library_report,sep="\t")
-# library_report = pd.read_csv("/data/database/kraken2uniq_database/k2_pluspf_16gb_20231009/library_report.tsv",sep="\t")
-# 处理第二列
+# Load library report
+logger.info('Loading library report', status='run')
+library_report = pd.read_csv(args.library_report, sep="\t")
+
+# Extract scientific name and seqid from sequence name
 library_report['sci_name'] = library_report['Sequence Name'].str.split(',').str[0].str.split('.1 ').str[1]
-library_report['species_name'] = library_report['sci_name'].str.split(' ').str[0] + " "+library_report['sci_name'].str.split(' ').str[1]
 library_report['seqid'] = library_report['Sequence Name'].str.split(' ').str[0].str.replace('>', '')
+# Filter out non-bacterial, viral, fungal, or archaeal sequences
 library_report = library_report[library_report['#Library'].isin(["bacteria","viral","fungi","archaea"])]
-library_report['acc'] = library_report['URL'].str.split('/').str[-1].str.extract(r'(GCF_\d+\.?\d*)')[0]
+# Extract accession from URL
+library_report['accession'] = library_report['URL'].str.split('/').str[-1].str.extract(r'(GCF_\d+\.?\d*)')[0]
+# Get unique seqids of interest
 seqid_interest =  set(library_report['seqid'].unique())
 
-taxid2genomeid = defaultdict(list)
-with open(os.path.join(args.seqid2taxid), "r") as mapping:
-    for line in mapping:
-        info, taxid = line.strip().split("\t")
-        info_tuple = info.split("|")
-        if len(info_tuple) > 2:
-            genome = info.split("|")[2]
-        else:
-            genome = info
-        # only keep "bacteria","viral","fungi","archaea"
-        if genome in seqid_interest:
-            taxid2genomeid[taxid].append(genome)
-# with open(os.path.join("/data/database/kraken2uniq_database/k2_pluspf_16gb_20231009/seqid2taxid.map"), "r") as mapping:
-#     for line in mapping:
-#         info, taxid = line.strip().split("\t")
-#         info_tuple = info.split("|")
-#         if len(info_tuple) > 2:
-#             genome = info.split("|")[2]
-#         else:
-#             genome = info
-#         # only keep "bacteria","viral","fungi","archaea"
-#         if genome in seqid_interest:
-#             taxid2genomeid[taxid].append(genome)
-
-# genome_list = defaultdict(list)
-# genome2taxid = dict()
-# # some taxid may only have subspecies taxid
-# failed_taxids = []
-# for taxid in desired_taxid_list:
-#     taxid = str(taxid)
-#     genome_list[taxid] = taxid2genomeid[taxid]
-#     if len(genome_list[taxid]) > 0:
-#         for genome in genome_list[taxid]:
-#             genome2taxid[genome] = taxid
-#     if len(genome_list[taxid]) == 0 :
-#         failed_taxids.append(taxid)
-# 构建defaultdict
-desired_taxid_dict = defaultdict(set)
-accession2taxid = defaultdict(dict)  # Use defaultdict to automatically create a set for new keys
-genome_list = defaultdict(list)
-genome2taxid = dict()
-specifice_genome_list = set()
-grouped = candidate_species.groupby('main_level_taxid') 
-count = 0
-for name, group in grouped:
-    count += 1
-    # if count > 3:
-    #     break    
-    if len(group) >= 1:
-        for index, row in group.head(5).iterrows():
-            main_level_taxid = str(row['main_level_taxid'])
-            rank = row['rank']
-            taxid = str(row['ncbi_taxa'])
-            # if rank != "S":
-            genome_list = taxid2genomeid[taxid]
-            if len(genome_list) > 5:
-                acc_list = library_report[library_report['seqid'].isin(genome_list)]['acc'].tolist()
-                for acc in acc_list:
-                    accession2taxid[acc]['main_level_taxid'] = main_level_taxid
-                    accession2taxid[acc]['rank'] = rank
-            elif len(genome_list) > 0:
-                acc_list = library_report[library_report['seqid'].isin(genome_list)]['acc'].tolist()
-                for acc in acc_list:
-                    accession2taxid[acc]['main_level_taxid'] = main_level_taxid
-                    accession2taxid[acc]['rank'] = rank
-                    specifice_genome_list.add(acc)
+# Load seqid to taxid mapping if provided
+seqid2taxid = {}
+if args.seqid2taxid:
+    logger.info('Loading kraken2 seqid to taxid mapping', status='run')
+    with open(args.seqid2taxid, "r") as mapping:
+        for line in mapping:
+            parts = line.strip().split("\t")
+            if len(parts) >= 2:
+                info, taxid = parts
+                info_parts = info.split("|")
+                if len(info_parts) > 2:
+                    seqid = info.split("|")[2]
+                else:
+                    seqid = info
+                seqid2taxid[seqid] = taxid
+    logger.info(f'Loaded {len(seqid2taxid)} seqid to taxid mappings', status='complete')
+else:
+    logger.error('No seqid to taxid mapping provided', status='error')
+    sys.exit(1)
 
 
-# filtered_library_report = library_report[library_report['seqid'].isin(genome2taxid.keys())]
-# assembly_summaries = assembly_summaries[assembly_summaries.index.isin(filtered_library_report['acc'])]
-# selected_assembly_summaries  = assembly_summaries.copy()
+# Add taxids to library report if possible
+if seqid2taxid:
+    logger.info('Adding taxids to library report', status='run')
+    library_report['taxid'] = library_report['seqid'].map(seqid2taxid)
+    # check if there are any missing taxids
+    missing_taxids = library_report[library_report['taxid'].isna()]
+    if len(missing_taxids) > 0:
+        logger.warning(f'Missing taxids for {len(missing_taxids)} sequences', status='check')
+    logger.info(f'Added {len(library_report)} taxids to library report', status='complete')
 
 
-# Filter the 'summary' DataFrame to only include rows where 'acc' matches 'library_report['acc']'
-selected_assembly_summaries = assembly_summaries.copy()[assembly_summaries.index.isin(accession2taxid.keys())]
-selected_assembly_summaries['acc'] = selected_assembly_summaries.index.tolist()
-selected_assembly_summaries = selected_assembly_summaries.groupby('species_taxid').apply(select_genomes).reset_index(drop=True)
-selected_assembly_summaries = selected_assembly_summaries.drop_duplicates(subset='acc')
-
-if not download_genomes:
-    print("Finished running everything. The genomes haven't been downloaded because you didn't want to download them.")
-    sys.exit()
-
+# Get existing sequences to skip download
 existing_sequences = set()
-# 如果library.fna文件存在，将其中的序列添加到集合中
 if os.path.exists(args.library_fna):
     with open(args.library_fna, 'r') as library_file:
         for record in SeqIO.parse(library_file, "fasta"):
             existing_sequences.add(record.id)
 else:
-    library_file = open(args.library_fna, 'w')
-    library_file.close()
+    with open(args.library_fna, 'w') as library_file:
+        logger.warning("No existing sequences found, will create empty library file and download all sequences", status='check')
+        pass  # Create empty file
 
-taxonomy = [[], []]
-# print(selected_assembly_summaries.columns.tolist())
-# 将 'acc' 列的数据类型都转换为字符串
-selected_assembly_summaries['acc'] = selected_assembly_summaries['acc'].astype(str)
-# filtered_library_report['acc'] = filtered_library_report['acc'].astype(str)
 
-# 然后再进行合并
-selected_assembly_summaries_map = pd.merge(selected_assembly_summaries, library_report[['acc', 'seqid']], on='acc', how='left')
+# Extract taxids from candidate species to use for filtering
+taxids_to_download = set(candidate_species['ncbi_taxa'].astype(str).tolist())
+main_level_taxids = set(candidate_species['main_level_taxid'].astype(str).tolist())
 
-# selected_assembly_summaries_map = pd.merge(selected_assembly_summaries, filtered_library_report[['acc', 'seqid']], on='acc', how='inner')
-selected_assembly_summaries_map = selected_assembly_summaries_map[["seqid","taxid"]]
-selected_assembly_summaries_map['accession'] = selected_assembly_summaries_map['seqid'].str.replace(r'\.\d+', '', regex=True)
-selected_assembly_summaries_map['accession.version'] = selected_assembly_summaries_map["seqid"]
-selected_assembly_summaries_map['taxid'] = selected_assembly_summaries_map["taxid"]
-selected_assembly_summaries_map = selected_assembly_summaries_map[['accession',"accession.version","taxid"]]
-genome_list = set(library_report[library_report['acc'].isin(selected_assembly_summaries['acc'])]['seqid'].unique().tolist())
-selected_assembly_summaries_map.to_csv(args.acc2tax,sep="\t",index=False)
-selected_assembly_summaries.set_index('acc', inplace=True)
+# Match library_report entries to candidate species
+# First try direct taxid matching
+matched_entries = []
 
+# Group by main_level_taxid
+grouped_candidates = candidate_species.groupby('main_level_taxid')
+
+# Process each main_level_taxid group
+## Init the list of taxids to download
+taxids_to_download = defaultdict(set)
+all_selected_entries = set()
+# select the microbiome library report for genome selection
+microbiome_library_report = library_report[library_report['#Library'].isin(["bacteria","viral","fungi","archaea"])]
+for main_level_taxid, group in grouped_candidates:
+    taxids_to_download[main_level_taxid] = set()
+
+    # Here we sort the group by rank, sample_count, and reads
+    # This is to prioritize higher rank taxa, taxa that are more prevalent, and taxa that have more reads
+    sorted_group = group[group['ncbi_taxa'] != main_level_taxid].sort_values(['rank','sample_count','reads'], ascending=False)
+    
+    # Find entries in library report matching this main_level_taxid
+    matching_entries = microbiome_library_report[microbiome_library_report['taxid'].isin(sorted_group['ncbi_taxa'])]
+
+    # sometime only main_level_taxid is in the library report
+    if matching_entries.empty:
+        try:
+            # only use the main_level_taxid
+            matching_entries_accession = microbiome_library_report[microbiome_library_report['taxid'] == main_level_taxid]['URL'].unique()[:max_urls_per_taxid]
+            taxids_to_download[main_level_taxid].update(matching_entries_accession)
+        except Exception as e:
+            logger.error(f"Error in matching entries for {main_level_taxid}: {e}")
+            sys.exit(1)
+    else:
+
+        # First, ensure each ncbi_taxa gets one URL
+        for taxid in sorted_group['ncbi_taxa'].astype(str):
+            if len(taxids_to_download[main_level_taxid]) >= max_urls_per_taxid:
+                break
+                
+            taxid_entries = matching_entries[matching_entries['taxid'] == taxid]
+            if not taxid_entries.empty:
+                # Take the first URL for this taxid
+                taxid_url = taxid_entries['URL'].unique()[0]
+                
+                if taxid_url not in taxids_to_download[main_level_taxid]:
+                    taxids_to_download[main_level_taxid].add(taxid_url)
+        
+        # If we still have room for more URLs, add additional ones in priority order
+        remaining_slots = max_urls_per_taxid - len(taxids_to_download[main_level_taxid])
+        if remaining_slots > 0:
+            for taxid in sorted_group['ncbi_taxa'].astype(str):
+                taxid_entries = matching_entries[matching_entries['taxid'] == taxid]
+                if not taxid_entries.empty:
+                    # Take the first URL for this taxid
+                    taxid_url_list = taxid_entries['URL'].unique()[:remaining_slots]
+                    # if the taxid_url is not in the selected_urls, add it
+                    for taxid_url in taxid_url_list:
+                        if taxid_url not in taxids_to_download[main_level_taxid]:
+                            taxids_to_download[main_level_taxid].add(taxid_url)
+    
+    all_selected_entries.update(taxids_to_download[main_level_taxid])
+
+logger.info(f"Selected {len(all_selected_entries)} entries", status='complete')
+# use all_selected_entries to filter library_report
+selected_library_report = library_report[library_report['URL'].isin(all_selected_entries)]
+# get the interest seqids
+selected_genome_set = set(selected_library_report['seqid'])
+# for each URL, keep only the first row
+selected_library_report_to_download = selected_library_report.drop_duplicates(subset=['URL'])
+num_to_download_url = len(selected_library_report_to_download)
+logger.info(f"Selected {num_to_download_url} URLs to download", status='complete')
+# only keep the url with the seqid dont exist in the existing_sequences
+selected_library_report_to_download = selected_library_report_to_download[~selected_library_report_to_download['seqid'].isin(existing_sequences)]
 
 def main():
-    run_multiprocessing(download_genomes, selected_assembly_summaries.index.values, int(n_processors))
-    # run_multiprocessing(download_genomes, existing_sequences,assembly_summaries.index.values,args.library_fna, int(n_processors))
 
+    # get the number of processors
+    n_processors = int(args.proc)
+    
+    logger.info("Beginning to download genomes", status='run')
+    # Convert DataFrame rows to dictionaries for multiprocessing
+    rows_to_process = selected_library_report_to_download.to_dict('records')
+    # Check if rows_to_process is empty and selected_library_report_to_download is not empty
+    download_genome_status = True
+    if len(rows_to_process) == 0:
+        if num_to_download_url > 0:
+            logger.info("All sequences have already been downloaded.", status='complete')
+
+        else:
+            logger.error("No sequences to download, please check the library report and the existing sequences", status='error')
+            sys.exit(1)
+    else:
+        # First stage: parallel download all genome files
+        n_processors = int(args.proc)
+        if len(rows_to_process) < n_processors:
+            n_processors = len(rows_to_process)
+            
+        logger.info(f"Parallel downloading {len(rows_to_process)} genomes with {n_processors} processors", status='run')
+        with Pool(processes=n_processors) as pool:
+            download_results = pool.map(download_genome, rows_to_process)
+        
+        # Filter successful downloads
+        successful_downloads = [r for r in download_results if r['success']]
+        logger.info(f"Successfully downloaded {len(successful_downloads)} of {len(rows_to_process)} genomes", status='complete')
+        
+        # Second stage: serial processing of all files for writing to library_fna
+        logger.info("Processing downloaded genomes and writing to library file", status='run')
+        
+        # Open library file for appending
+        with open(args.library_fna, 'a') as library_file:
+            for result in successful_downloads:
+                try:
+                    fna_path = result['path']
+                    seqid = result['seqid']
+                    is_interest = seqid in selected_genome_set
+                    
+                    with gzip.open(fna_path, 'rt') as fna_file:
+                        for record in SeqIO.parse(fna_file, "fasta"):
+                            if record.id not in existing_sequences:
+                                # write to library file
+                                SeqIO.write(record, library_file, "fasta")                                
+                            else:
+                                logger.info(f'Skipping duplicate sequence {record.id}', status='skip')
+                    
+                    logger.info(f'Successfully processed {result["accession"]} fna file', status='complete')
+                except Exception as e:
+                    logger.error(f"Error processing {result['accession']}: {str(e)}")
+    
+    logger.info("Processing genomes and writing to interest file", status='run')
+    # Create interest_fna file (if needed)
+    interest_file = None
+    if args.interest_fna:
+        interest_file = open(args.interest_fna, 'w')
+    
+    # Open library file for read
+    already_added_genomes = set()
+    with open(args.library_fna, 'r') as library_file:
+        for record in SeqIO.parse(library_file, "fasta"):
+            if record.id in selected_genome_set and record.id not in already_added_genomes:
+                SeqIO.write(record, interest_file, "fasta")
+                already_added_genomes.add(record.id)
+    
+    # close the interest file
+    if interest_file:
+        interest_file.close()
+
+    # save the accession to taxid mapping as a tsv file
+    selected_library_report[['seqid','taxid']].to_csv(args.acc2tax, index=False, sep="\t")
+    
+    # finish
+    logger.info(f"Successfully processed {len(already_added_genomes)} genomes, completed ratio {len(already_added_genomes)/len(selected_genome_set) * 100}%", status='complete')
 
 if __name__ == "__main__":
     freeze_support()   # required to use multiprocessing
     main()
-
-    # taxonomy = pd.DataFrame(taxonomy).transpose()
-    # taxonomy.to_csv(os.path.join(folder, "taxonomy",'download_genomes.tsv'), sep='\t', index=False, header=False)
-    with open(args.library_fna, 'r') as library_file:
-        with open(args.interest_fna, 'w') as interest_file:
-            for record in SeqIO.parse(library_file, "fasta"):
-                if record.id in genome_list:
-                    SeqIO.write(record,interest_file, "fasta")
-    logger.info('Finished downloaded', status='complete') 
-    # print("Finished running everything. The genomes should be downloaded in "+download_folder+" and the list of these and their taxonomy is in genomes.tsv \nA log of any genomes that couldn't be downloaded is in logfile.txt")
