@@ -636,7 +636,7 @@ def main():
 
     sparsematrix =  csr_matrix((vals, (rows, cols)))
     # Get mpa name for taxonomy ID
-    taxname_list = [taxid_info_dict[k] for k in taxid_list]
+    taxname_list = [taxid2node[k].name for k in taxid_list]
     # store sparse matrix
     mmwrite(args.matrixfile, sparsematrix)
     taxa_df = pd.DataFrame(data=csr_matrix.todense(sparsematrix))
@@ -659,25 +659,61 @@ def main():
 
     # Output detailed results with barcode information
     if args.output_read_tsv:
+        logger.info(f'Building taxonomic lineage information for detailed output', status='run')
+        
+        # Build a dictionary mapping each taxonomy ID to its full taxonomic path
+        taxid_to_lineage = {}
+        taxonomic_levels = {'D': 'Domain', 'P': 'Phylum', 'C': 'Class', 'O': 'Order', 
+                           'F': 'Family', 'G': 'Genus', 'S': 'Species'}
+        
+        # Process all taxonomy IDs found in read assignments
+        unique_taxids = set(taxid_info_dict.keys())
+        for taxid in unique_taxids:
+            if taxid in taxid2node:
+                node = taxid2node[taxid]
+                # Get taxonomic lineage path
+                lineage = {}
+                
+                # Start with the current node
+                lineage[node.level_rank] = node.name
+                
+                # Traverse up to get all ancestors
+                current = node
+                while current.parent is not None:
+                    current = current.parent
+                    if current.level_rank in taxonomic_levels:
+                        lineage[current.level_rank] = current.name
+                
+                taxid_to_lineage[taxid] = lineage
+        
         # Convert dictionary to list for DataFrame creation
         detailed_results = []
         for read_name, info in read_taxid_info_dict.items():
             if "Barcode" in info:  # Only output reads with barcode information
+                taxid = info["taxid"]
+                lineage = taxid_to_lineage[taxid]
                 result = {
                     "Read_Name": read_name,
                     "Taxonomy_ID": info["taxid"],
-                    "Species": info["taxname"],
-                    "Genus": info["taxgenus"],
-                    "Barcode": info["Barcode"]
+                    "Barcode": info["Barcode"],
+                    "Species": lineage.get("S", np.nan),
+                    "Genus": lineage.get("G", np.nan),
+                    "Family": lineage.get("F", np.nan),
+                    "Order": lineage.get("O", np.nan),
+                    "Class": lineage.get("C", np.nan),
+                    "Phylum": lineage.get("P", np.nan),
+                    "Domain": lineage.get("D", np.nan)
                 }
+                
                 if mode == "CB_UMI" and "UMI" in info:
                     result["UMI"] = info["UMI"]
+                
                 detailed_results.append(result)
         
         # Create DataFrame and output as TSV
         detailed_df = pd.DataFrame(detailed_results)
         detailed_df.to_csv(args.output_read_tsv, sep="\t", index=False)
-        logger.info(f"Detailed TSV with barcode information saved to {args.output_read_tsv}", status="complete")
+        logger.info(f"Detailed TSV with taxonomic lineage information saved to {args.output_read_tsv}", status="complete")
 
     logger.info(f'Finish Saving the result', status='Complete')
 
