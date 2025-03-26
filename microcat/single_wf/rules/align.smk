@@ -32,43 +32,43 @@ def get_db_chunk_alignments(wildcards):
     )
 
 
-rule download_taxdump:
-    input:
-        candidate_species =  os.path.join(
-                config["output"]["classifier"],
-                "rmhost_kraken2_qc/study/krak_candidate_species.txt"),
-    output:
-        assembly_summary = expand(os.path.join(
-            config["params"]["align"]["download_dir"],
-            "taxonomy/{domain}_assembly_summary.txt"),
-            domain=['bacteria','fungi','viral','archaea']),
-        taxdump = expand(os.path.join(
-            config["params"]["align"]["download_dir"],
-            "taxonomy/{taxdump}"),
-            taxdump=["names.dmp", "nodes.dmp","merged.dmp"]),
-    params:
-        taxonomy_folder = os.path.join(
-            config["params"]["align"]["download_dir"],
-            "taxonomy"),
-    resources:
-        mem_mb = 1000,
-    threads:
-        1
-    run:
-        import os
-        import pandas as pd
+# rule download_taxdump:
+#     input:
+#         candidate_species =  os.path.join(
+#                 config["output"]["classifier"],
+#                 "rmhost_kraken2_qc/study/krak_candidate_species.txt"),
+#     output:
+#         assembly_summary = expand(os.path.join(
+#             config["params"]["align"]["download_dir"],
+#             "taxonomy/{domain}_assembly_summary.txt"),
+#             domain=['bacteria','fungi','viral','archaea']),
+#         taxdump = expand(os.path.join(
+#             config["params"]["align"]["download_dir"],
+#             "taxonomy/{taxdump}"),
+#             taxdump=["names.dmp", "nodes.dmp","merged.dmp"]),
+#     params:
+#         taxonomy_folder = os.path.join(
+#             config["params"]["align"]["download_dir"],
+#             "taxonomy"),
+#     resources:
+#         mem_mb = 1000,
+#     threads:
+#         1
+#     run:
+#         import os
+#         import pandas as pd
 
-        domains = ['bacteria','archaea','fungi','viral']
+#         domains = ['bacteria','archaea','fungi','viral']
 
-        for domain in domains:
-            if not os.path.exists(os.path.join(params.taxonomy_folder,str(domain)+"_assembly_summary.txt")):
-                shell("wget -q https://ftp.ncbi.nlm.nih.gov/genomes/refseq/{domain}/assembly_summary.txt -O {params.taxonomy_folder}/{domain}_assembly_summary.txt")
-                print(f"{domain} assembly summary downloaded successfully.")
+#         for domain in domains:
+#             if not os.path.exists(os.path.join(params.taxonomy_folder,str(domain)+"_assembly_summary.txt")):
+#                 shell("wget -q https://ftp.ncbi.nlm.nih.gov/genomes/refseq/{domain}/assembly_summary.txt -O {params.taxonomy_folder}/{domain}_assembly_summary.txt")
+#                 print(f"{domain} assembly summary downloaded successfully.")
 
-        shell("wget -q https://ftp.ncbi.nih.gov/pub/taxonomy/new_taxdump/new_taxdump.tar.gz -O {params.taxonomy_folder}/new_taxdump.tar.gz")
-        shell("tar -xf {params.taxonomy_folder}/new_taxdump.tar.gz -C {params.taxonomy_folder}")
-        if os.path.exists(os.path.join(params.taxonomy_folder, "new_taxdump.tar.gz")): 
-            os.remove(os.path.join(params.taxonomy_folder, "new_taxdump.tar.gz"))
+#         shell("wget -q https://ftp.ncbi.nih.gov/pub/taxonomy/new_taxdump/new_taxdump.tar.gz -O {params.taxonomy_folder}/new_taxdump.tar.gz")
+#         shell("tar -xf {params.taxonomy_folder}/new_taxdump.tar.gz -C {params.taxonomy_folder}")
+#         if os.path.exists(os.path.join(params.taxonomy_folder, "new_taxdump.tar.gz")): 
+#             os.remove(os.path.join(params.taxonomy_folder, "new_taxdump.tar.gz"))
 
 rule download_candidate_species:
     input:
@@ -82,7 +82,12 @@ rule download_candidate_species:
         taxdump = expand(os.path.join(
             config["params"]["align"]["download_dir"],
             "taxonomy/{taxdump}"),
-            taxdump=["names.dmp", "nodes.dmp","merged.dmp"])
+            taxdump=["names.dmp", "nodes.dmp","merged.dmp"]),
+        library_report_path = os.path.join(
+            config["params"]["classifier"]["kraken2uniq"]["kraken2_database"],
+                                    "library_report.tsv"),
+        seqid2taxid_path = os.path.join(config["params"]["classifier"]["kraken2uniq"]["kraken2_database"],
+                                    "seqid2taxid.map"),
     output:
         library_fna = os.path.join(
             config["params"]["align"]["download_dir"],
@@ -97,11 +102,6 @@ rule download_candidate_species:
         download_path = os.path.join(
             config["params"]["align"]["download_dir"],),
         download_candidate_species_script= config["scripts"]["download_candidate_species"],
-        library_report_path = os.path.join(
-            config["params"]["classifier"]["kraken2uniq"]["kraken2_database"],
-                                    "library_report.tsv"),
-        seqid2taxid_path = os.path.join(config["params"]["classifier"]["kraken2uniq"]["kraken2_database"],
-                                    "seqid2taxid.map"),
         project = config["params"]["project"],
     log:
         os.path.join(config["logs"]["classifier"],
@@ -115,8 +115,8 @@ rule download_candidate_species:
         python  {params.download_candidate_species_script}\
         --candidate {input.candidate_species} \
         --folder {params.download_path} \
-        --seqid2taxid {params.seqid2taxid_path} \
-        --library_report {params.library_report_path} \
+        --seqid2taxid {input.seqid2taxid_path} \
+        --library_report {input.library_report_path} \
         --interest_fna {output.interest_fna} \
         --library_fna {output.library_fna} \
         --project {params.project} \
@@ -393,6 +393,7 @@ if config["params"]["align"]["bwa2"]["do"]:
             if fasta_size > max_usage:
                 # 计算块的数量
                 chunk_sum = round(fasta_size / max_usage)
+                print(f"Database size is {fasta_size / (1024 ** 3)} GB, need {chunk_sum} chunks")
                 max_chunk_size = fasta_size / chunk_sum
 
                 # 初始化块
@@ -533,16 +534,13 @@ if config["params"]["align"]["bwa2"]["do"]:
     rule bwa2_expection_maximization_classifier:
         input:
             bwa_aligned_sorted_mapped_bam = os.path.join(
-                config["output"]["classifier"],"bwa_align/{sample}/Aligned.BWA.sortedByCoord.mapped.out.bam"),
-            names_dump = os.path.join(
-            config["params"]["align"]["download_dir"],
-            "taxonomy/names.dmp"),
-            nodes_dump = os.path.join(
-            config["params"]["align"]["download_dir"],
-            "taxonomy/nodes.dmp"),            
+                config["output"]["classifier"],"bwa_align/{sample}/Aligned.BWA.sortedByCoord.mapped.out.bam"),   
             acc2tax = os.path.join(
                 config["params"]["align"]["download_dir"],
-                "acc2tax/",f"{config['params']['project']}_acc2tax.txt"), 
+                "acc2tax/",f"{config['params']['project']}_acc2tax.txt"),
+            ktaxonomy_file = os.path.join(
+                config["params"]["classifier"]["kraken2uniq"]["kraken2_database"],
+                "ktaxonomy.tsv")
         output:
             em_reads_assign_tsv = os.path.join(
                 config["output"]["classifier"],"bwa_align/{sample}/Aligned.BWA.sortedByCoord.out.em_reads_assign.tsv"),
@@ -567,7 +565,7 @@ if config["params"]["align"]["bwa2"]["do"]:
             --bam_file {input.bwa_aligned_sorted_mapped_bam} \
             --taxonomy_file {input.acc2tax} \
             --output {output.em_reads_assign_tsv} \
-            --names_dmp_file {input.names_dump} \
+            --ktaxonomy_file {input.ktaxonomy_file} \
             --log_file {log}
             """
     rule bwa2_matrix_build:
@@ -577,12 +575,9 @@ if config["params"]["align"]["bwa2"]["do"]:
             unmapped_bam_sorted_file =os.path.join(
                 config["output"]["host"],
                 "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam"),
-            names_dump = os.path.join(
-            config["params"]["align"]["download_dir"],
-            "taxonomy/names.dmp"),
-            nodes_dump = os.path.join(
-            config["params"]["align"]["download_dir"],
-            "taxonomy/nodes.dmp"),   
+            ktaxonomy_file = os.path.join(
+                config["params"]["classifier"]["kraken2uniq"]["kraken2_database"],
+                "ktaxonomy.tsv")
         output:
             profile_tsv = os.path.join(
                 config["output"]["profile"],
@@ -610,7 +605,16 @@ if config["params"]["align"]["bwa2"]["do"]:
             config["envs"]["kmer_python"]
         shell:
             """
-            python {params.bam2mtx_script} --cb_bam {input.unmapped_bam_sorted_file} --align_result {input.em_reads_assign_tsv} --nodes {input.nodes_dump} --names {input.names_dump} --profile_tsv {output.profile_tsv} --matrixfile {output.matrix_file} --cellfile {output.barcode_file} --taxfile {output.feature_file}  --output_read_tsv {output.read_tsv} --log_file {log}
+            python {params.bam2mtx_script} \
+            --cb_bam {input.unmapped_bam_sorted_file} \
+            --align_result {input.em_reads_assign_tsv} \
+            --ktaxonomy_file {input.ktaxonomy_file} \
+            --profile_tsv {output.profile_tsv} \
+            --matrixfile {output.matrix_file} \
+            --cellfile {output.barcode_file} \
+            --taxfile {output.feature_file}  \
+            --output_read_tsv {output.read_tsv} \
+            --log_file {log}
             """
     rule bwa2_aligned_all:
         input:
@@ -784,223 +788,235 @@ else:
         input:
 
 
-if config["params"]["align"]["minimap2"]["mm2plus"]["do"]:
-    # if config["params"]["align"]["minimap2"]["mm2plus"]['build_index']:
-    #     rule mm2plus_build_Index:
-    #         output:
-    #             minimap2_db = os.path.join(
-    #             config["params"]["align"]["minimap2"]["db"],
-    #             f"index/{config['params']['project']}/{config['params']['project']}.mmi"),
-    #         input:
-    #             interest_fna = os.path.join(
-    #             config["params"]["align"]["download_dir"],
-    #             f"library/{config['params']['project']}.fna"),
-    #         params:
-    #             bwa_db_name = os.path.join(
-    #                 config["params"]["align"]["bwa"]["db"],
-    #                 f"index/{config['params']['project']}/{config['params']['project']}")
-    #         conda:
-    #             config["envs"]["mm2plus"]
-    #         threads: 20
-    #         log:
-    #             os.path.join(config["logs"]["classifier"],
-    #                         "mm2plus_db/mm2plus_db_build.log")
-    #         shell:
-    #             """
-    #             mm2plus -ax sr -t 20 -d {output.minimap2_db} {input.interest_fna}
-    #             """
+# if config["params"]["align"]["minimap2"]["mm2plus"]["do"]:
+#     # if config["params"]["align"]["minimap2"]["mm2plus"]['build_index']:
+#     #     rule mm2plus_build_Index:
+#     #         output:
+#     #             minimap2_db = os.path.join(
+#     #             config["params"]["align"]["minimap2"]["db"],
+#     #             f"index/{config['params']['project']}/{config['params']['project']}.mmi"),
+#     #         input:
+#     #             interest_fna = os.path.join(
+#     #             config["params"]["align"]["download_dir"],
+#     #             f"library/{config['params']['project']}.fna"),
+#     #         params:
+#     #             bwa_db_name = os.path.join(
+#     #                 config["params"]["align"]["bwa"]["db"],
+#     #                 f"index/{config['params']['project']}/{config['params']['project']}")
+#     #         conda:
+#     #             config["envs"]["mm2plus"]
+#     #         threads: 20
+#     #         log:
+#     #             os.path.join(config["logs"]["classifier"],
+#     #                         "mm2plus_db/mm2plus_db_build.log")
+#     #         shell:
+#     #             """
+#     #             mm2plus -ax sr -t 20 -d {output.minimap2_db} {input.interest_fna}
+#     #             """
 
-    # TODO: calculate_db_chunks
-    # checkpoint calculate_db_chunks:
-    #     input:
-    #         interest_fna = os.path.join(
-    #             config["params"]["align"]["download_dir"],
-    #             "library",f"{config['params']['project']}.fna"),
-    #     output:
-    #         # chunk_fna = temp(os.path.join(
-    #         #     config["params"]["align"]["download_dir"],
-    #         #     "library",config['params']['project'],"chunk_{chunk_num}.fna")),
-    #         chunk_total = os.path.join(
-    #             config["params"]["align"]["download_dir"],
-    #             "library",config['params']['project'],"chunk_num.txt"),
-    #     params:
-    #         chunk_fna_prefix = os.path.join(
-    #             config["params"]["align"]["download_dir"],
-    #             f"library/{config['params']['project']}/chunk"),
-    #     run:
-    #         import os
-    #         from Bio.SeqIO.FastaIO import SimpleFastaParser
-    #         max_usage = 4 * (1024 ** 3)  # 4 GB
-    #         fasta_size = os.stat(input.interest_fna).st_size
+#     # TODO: calculate_db_chunks
+#     # checkpoint calculate_db_chunks:
+#     #     input:
+#     #         interest_fna = os.path.join(
+#     #             config["params"]["align"]["download_dir"],
+#     #             "library",f"{config['params']['project']}.fna"),
+#     #     output:
+#     #         # chunk_fna = temp(os.path.join(
+#     #         #     config["params"]["align"]["download_dir"],
+#     #         #     "library",config['params']['project'],"chunk_{chunk_num}.fna")),
+#     #         chunk_total = os.path.join(
+#     #             config["params"]["align"]["download_dir"],
+#     #             "library",config['params']['project'],"chunk_num.txt"),
+#     #     params:
+#     #         chunk_fna_prefix = os.path.join(
+#     #             config["params"]["align"]["download_dir"],
+#     #             f"library/{config['params']['project']}/chunk"),
+#     #     run:
+#     #         import os
+#     #         from Bio.SeqIO.FastaIO import SimpleFastaParser
+#     #         max_usage = 4 * (1024 ** 3)  # 4 GB
+#     #         fasta_size = os.stat(input.interest_fna).st_size
 
-    #         if fasta_size > max_usage:
-    #             # 计算块的数量
-    #             chunk_sum = round(fasta_size / max_usage)
-    #             max_chunk_size = fasta_size / chunk_sum
+#     #         if fasta_size > max_usage:
+#     #             # 计算块的数量
+#     #             chunk_sum = round(fasta_size / max_usage)
+#     #             max_chunk_size = fasta_size / chunk_sum
 
-    #             # 初始化块
-    #             n = 1
-    #             chunk_fna = params.chunk_fna_prefix + "_" + str(n) + ".fna"
-    #             output_fna = open(chunk_fna, "a")
-    #             # 将fasta文件拆分为块
-    #             with open(input.interest_fna, 'r') as input_fna:
-    #                 for title, seq in SimpleFastaParser(input_fna):
-    #                     file_size = os.stat(chunk_fna).st_size
-    #                     if file_size > max_chunk_size:
-    #                         n += 1
-    #                         output_fna.close()
-    #                         chunk_fna = params.chunk_fna_prefix + "_" + str(n) + ".fna"
-    #                         output_fna = open(chunk_fna, "a")
-    #                     output_fna.write(f'>{title}\n{seq}\n')
-    #             with open(output.chunk_total, "w") as f:
-    #                 f.write(str(n))
-    #         else:
-    #             # 将fasta文件转换为单个块
-    #             n = 1
-    #             chunk_fna = params.chunk_fna_prefix + "_" + str(n) + ".fna"
-    #             shell(f"cp {input.interest_fna} {chunk_fna}")
-    #             with open(output.chunk_total, "w") as f:
-    #                 f.write(str(n))
+#     #             # 初始化块
+#     #             n = 1
+#     #             chunk_fna = params.chunk_fna_prefix + "_" + str(n) + ".fna"
+#     #             output_fna = open(chunk_fna, "a")
+#     #             # 将fasta文件拆分为块
+#     #             with open(input.interest_fna, 'r') as input_fna:
+#     #                 for title, seq in SimpleFastaParser(input_fna):
+#     #                     file_size = os.stat(chunk_fna).st_size
+#     #                     if file_size > max_chunk_size:
+#     #                         n += 1
+#     #                         output_fna.close()
+#     #                         chunk_fna = params.chunk_fna_prefix + "_" + str(n) + ".fna"
+#     #                         output_fna = open(chunk_fna, "a")
+#     #                     output_fna.write(f'>{title}\n{seq}\n')
+#     #             with open(output.chunk_total, "w") as f:
+#     #                 f.write(str(n))
+#     #         else:
+#     #             # 将fasta文件转换为单个块
+#     #             n = 1
+#     #             chunk_fna = params.chunk_fna_prefix + "_" + str(n) + ".fna"
+#     #             shell(f"cp {input.interest_fna} {chunk_fna}")
+#     #             with open(output.chunk_total, "w") as f:
+#     #                 f.write(str(n))
+#     rule extract_mm2plus_fasta:
+#         input:
+#             interest_fna = os.path.join(
+#                 config["params"]["align"]["download_dir"],
+#                 "library/",f"{config['params']['project']}.fna"),
+#         output:
+#             mm2plus_fasta = os.path.join(
+#                 config["params"]["align"]["download_dir"],
+#                 "library/",f"{config['params']['project']}_{sample}.fna"),
+#         shell:
+#             """
+            
+#             """
+#     rule mm2plus_alignment:
+#         output:
+#             mm2plus_aligned_sorted_bam = os.path.join(
+#                 config["output"]["classifier"],"mm2plus_align/{sample}/Aligned.mm2plus.sortedByCoord.out.bam"),
+#             mm2plus_aligned_sorted_bam_index = os.path.join(
+#                 config["output"]["classifier"],"mm2plus_align/{sample}/Aligned.mm2plus.sortedByCoord.out.bam.bai"),
+#         input:
+#             krak2_extracted_bam = os.path.join(
+#                 config["output"]["classifier"],
+#                 "rmhost_extracted_classified_output/{sample}/{sample}_kraken2_extracted_classified.bam"),
+#             interest_fna = os.path.join(
+#                 config["params"]["align"]["download_dir"],
+#                 "library/",f"{config['params']['project']}.fna"),
+#             krak_screened_fastq = os.path.join(
+#                 config["output"]["classifier"],
+#                 "rmhost_extracted_classified_output/{sample}/{sample}_kraken2_screen.fastq"),
+#             krak_screened_r1_fastq = os.path.join(
+#                 config["output"]["classifier"],
+#                 "rmhost_extracted_classified_output/{sample}/{sample}_kraken2_screen_r1.fastq"),
+#             krak_screened_r2_fastq = os.path.join(
+#                 config["output"]["classifier"],
+#                 "rmhost_extracted_classified_output/{sample}/{sample}_kraken2_screen_r2.fastq")
+#         threads: 
+#             config["resources"]["mm2plus"]["threads"]
+#         log:
+#             os.path.join(config["logs"]["classifier"],
+#                         "mm2plus/{sample}/mm2plus_alignment.log")
+#         conda:
+#             config["envs"]["mm2plus"]
+#         benchmark:
+#             os.path.join(config["benchmarks"]["classifier"],
+#                 "mm2plus/{sample}/mm2plus_alignment.tsv")
+#         resources:
+#             mem_mb=(
+#                 lambda wildcards: os.stat(os.path.join(config["params"]["align"]["download_dir"],
+#                 f"library/{config['params']['project']}.fna")).st_size  /1024 /1024  * 6
+#             ),
+#         shell:
+#             """
+#             if [ -s "{input.krak_screened_fastq}" ]; then
+#                 mm2plus -ax sr -A2 -B2 -O4,24 -E2,1 -k10 -w8 -t {threads} {input.interest_fna} {input.krak_screened_fastq}  | samtools sort --threads {threads} -o  {output.mm2plus_aligned_sorted_bam}
+#             else
+#                 mm2plus -ax sr -A2 -B2 -O4,24 -E2,1 -k10 -w8 -t {threads} {input.interest_fna} -p {input.krak_screened_r1_fastq} {input.krak_screened_r2_fastq}  | samtools sort --threads {threads} -o {output.mm2plus_aligned_sorted_bam}
 
-    rule mm2plus_alignment:
-        output:
-            mm2plus_aligned_sorted_bam = os.path.join(
-                config["output"]["classifier"],"mm2plus_align/{sample}/Aligned.mm2plus.sortedByCoord.out.bam"),
-            mm2plus_aligned_sorted_bam_index = os.path.join(
-                config["output"]["classifier"],"mm2plus_align/{sample}/Aligned.mm2plus.sortedByCoord.out.bam.bai"),
-        input:
-            krak2_extracted_bam = os.path.join(
-                config["output"]["classifier"],
-                "rmhost_extracted_classified_output/{sample}/{sample}_kraken2_extracted_classified.bam"),
-            interest_fna = os.path.join(
-                config["params"]["align"]["download_dir"],
-                "library/",f"{config['params']['project']}.fna"),
-            krak_screened_fastq = os.path.join(
-                config["output"]["classifier"],
-                "rmhost_extracted_classified_output/{sample}/{sample}_kraken2_screen.fastq"),
-            krak_screened_r1_fastq = os.path.join(
-                config["output"]["classifier"],
-                "rmhost_extracted_classified_output/{sample}/{sample}_kraken2_screen_r1.fastq"),
-            krak_screened_r2_fastq = os.path.join(
-                config["output"]["classifier"],
-                "rmhost_extracted_classified_output/{sample}/{sample}_kraken2_screen_r2.fastq")
-        threads: 
-            config["resources"]["mm2plus"]["threads"]
-        log:
-            os.path.join(config["logs"]["classifier"],
-                        "mm2plus/{sample}/mm2plus_alignment.log")
-        conda:
-            config["envs"]["mm2plus"]
-        benchmark:
-            os.path.join(config["benchmarks"]["classifier"],
-                "mm2plus/{sample}/mm2plus_alignment.tsv")
-        resources:
-            mem_mb=(
-                lambda wildcards: os.stat(os.path.join(config["params"]["align"]["download_dir"],
-                f"library/{config['params']['project']}.fna")).st_size  /1024 /1024  * 6
-            ),
-        shell:
-            """
-            if [ -s "{input.krak_screened_fastq}" ]; then
-                mm2plus -ax sr -A2 -B2 -O4,24 -E2,1 -k10 -w8 -t {threads} {input.interest_fna} {input.krak_screened_fastq}  | samtools sort --threads {threads} -o  {output.mm2plus_aligned_sorted_bam}
-            else
-                mm2plus -ax sr -A2 -B2 -O4,24 -E2,1 -k10 -w8 -t {threads} {input.interest_fna} -p {input.krak_screened_r1_fastq} {input.krak_screened_r2_fastq}  | samtools sort --threads {threads} -o {output.mm2plus_aligned_sorted_bam}
+#             fi
 
-            fi
+#             samtools index {output.mm2plus_aligned_sorted_bam}
+#             """
+#     rule mm2plus_expection_maximization_classifier:
+#         input:
+#             mm2plus_aligned_sorted_mapped_bam = os.path.join(
+#                 config["output"]["classifier"],"mm2plus_align/{sample}/Aligned.mm2plus.sortedByCoord.mapped.out.bam"),
+#             names_dump = os.path.join(
+#             config["params"]["align"]["download_dir"],
+#             "taxonomy/names.dmp"),
+#             nodes_dump = os.path.join(
+#             config["params"]["align"]["download_dir"],
+#             "taxonomy/nodes.dmp"),            
+#             acc2tax = os.path.join(
+#                 config["params"]["align"]["download_dir"],
+#                 "acc2tax/",f"{config['params']['project']}_acc2tax.txt"), 
+#         output:
+#             em_reads_assign_tsv = os.path.join(
+#                 config["output"]["classifier"],"mm2plus_align/{sample}/Aligned.mm2plus.sortedByCoord.out.em_reads_assign.tsv"),
+#         params:
+#             bwa_output = os.path.join(
+#                 config["output"]["classifier"],"mm2plus_align","{sample}"),
+#             em_script = config["scripts"]["em_script"],
+#             project = config["params"]["project"],
+#         resources:
+#             mem_mb=config["resources"]["krak2_matrix_build"]["mem_mb"]
+#         benchmark:
+#             os.path.join(config["benchmarks"]["classifier"],
+#                 "mm2plus/{sample}/mm2plus_assigned.tsv")
+#         conda:
+#             config["envs"]["kmer_python"]
+#         log:
+#             os.path.join(config["logs"]["classifier"],
+#                         "sam2lca/{sample}_sam2lca.log")
+#         shell:
+#             """
+#             python {params.em_script} \
+#             --bam_file {input.mm2plus_aligned_sorted_mapped_bam} \
+#             --taxonomy_file {input.acc2tax} \
+#             --output {output.em_reads_assign_tsv} \
+#             --names_dmp_file {input.names_dump} \
+#             --log_file {log}
+#             """
+#     rule mm2plus_matrix_build:
+#         input:
+#             em_reads_assign_tsv = os.path.join(
+#                 config["output"]["classifier"],"mm2plus_align/{sample}/Aligned.mm2plus.sortedByCoord.out.em_reads_assign.tsv"),
+#             unmapped_bam_sorted_file =os.path.join(
+#                 config["output"]["host"],
+#                 "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam"),
+#             names_dump = os.path.join(
+#             config["params"]["align"]["download_dir"],
+#             "taxonomy/names.dmp"),
+#             nodes_dump = os.path.join(
+#             config["params"]["align"]["download_dir"],
+#             "taxonomy/nodes.dmp"),   
+#         output:
+#             profile_tsv = os.path.join(
+#                 config["output"]["profile"],
+#                 "{sample}/microbiome_out/microbiome_profile.tsv"), 
+#             barcode_file = os.path.join(
+#                 config["output"]["profile"],
+#                 "{sample}/microbiome_out/barcodes.tsv"),
+#             matrix_file = os.path.join(
+#                 config["output"]["profile"],
+#                 "{sample}/microbiome_out/matrix.mtx"),
+#             feature_file = os.path.join(
+#                 config["output"]["profile"],
+#                 "{sample}/microbiome_out/features.tsv"),
+#             read_tsv = os.path.join(
+#                 config["output"]["profile"],
+#                 "{sample}/microbiome_out/read_assignment.tsv"),
+#         params:
+#             bam2mtx_script = config["scripts"]["bam2mtx"],
+#         resources:
+#             mem_mb=config["resources"]["krak2_matrix_build"]["mem_mb"]
+#         log:
+#             os.path.join(config["logs"]["classifier"],
+#                         "matrix/{sample}_martix_build.log")
+#         conda:
+#             config["envs"]["kmer_python"]
+#         shell:
+#             """
+#             python {params.bam2mtx_script} --cb_bam {input.unmapped_bam_sorted_file} --align_result {input.em_reads_assign_tsv} --nodes {input.nodes_dump} --names {input.names_dump} --profile_tsv {output.profile_tsv} --matrixfile {output.matrix_file} --cellfile {output.barcode_file} --taxfile {output.feature_file}  --output_read_tsv {output.read_tsv} --log_file {log}
+#             """
 
-            samtools index {output.mm2plus_aligned_sorted_bam}
-            """
-    rule mm2plus_expection_maximization_classifier:
-        input:
-            mm2plus_aligned_sorted_mapped_bam = os.path.join(
-                config["output"]["classifier"],"mm2plus_align/{sample}/Aligned.mm2plus.sortedByCoord.mapped.out.bam"),
-            names_dump = os.path.join(
-            config["params"]["align"]["download_dir"],
-            "taxonomy/names.dmp"),
-            nodes_dump = os.path.join(
-            config["params"]["align"]["download_dir"],
-            "taxonomy/nodes.dmp"),            
-            acc2tax = os.path.join(
-                config["params"]["align"]["download_dir"],
-                "acc2tax/",f"{config['params']['project']}_acc2tax.txt"), 
-        output:
-            em_reads_assign_tsv = os.path.join(
-                config["output"]["classifier"],"mm2plus_align/{sample}/Aligned.mm2plus.sortedByCoord.out.em_reads_assign.tsv"),
-        params:
-            bwa_output = os.path.join(
-                config["output"]["classifier"],"mm2plus_align","{sample}"),
-            em_script = config["scripts"]["em_script"],
-            project = config["params"]["project"],
-        resources:
-            mem_mb=config["resources"]["krak2_matrix_build"]["mem_mb"]
-        benchmark:
-            os.path.join(config["benchmarks"]["classifier"],
-                "mm2plus/{sample}/mm2plus_assigned.tsv")
-        conda:
-            config["envs"]["kmer_python"]
-        log:
-            os.path.join(config["logs"]["classifier"],
-                        "sam2lca/{sample}_sam2lca.log")
-        shell:
-            """
-            python {params.em_script} \
-            --bam_file {input.mm2plus_aligned_sorted_mapped_bam} \
-            --taxonomy_file {input.acc2tax} \
-            --output {output.em_reads_assign_tsv} \
-            --names_dmp_file {input.names_dump} \
-            --log_file {log}
-            """
-    rule mm2plus_matrix_build:
-        input:
-            em_reads_assign_tsv = os.path.join(
-                config["output"]["classifier"],"mm2plus_align/{sample}/Aligned.mm2plus.sortedByCoord.out.em_reads_assign.tsv"),
-            unmapped_bam_sorted_file =os.path.join(
-                config["output"]["host"],
-                "unmapped_host/{sample}/Aligned_sortedByName_unmapped_out.bam"),
-            names_dump = os.path.join(
-            config["params"]["align"]["download_dir"],
-            "taxonomy/names.dmp"),
-            nodes_dump = os.path.join(
-            config["params"]["align"]["download_dir"],
-            "taxonomy/nodes.dmp"),   
-        output:
-            profile_tsv = os.path.join(
-                config["output"]["profile"],
-                "{sample}/microbiome_out/microbiome_profile.tsv"), 
-            barcode_file = os.path.join(
-                config["output"]["profile"],
-                "{sample}/microbiome_out/barcodes.tsv"),
-            matrix_file = os.path.join(
-                config["output"]["profile"],
-                "{sample}/microbiome_out/matrix.mtx"),
-            feature_file = os.path.join(
-                config["output"]["profile"],
-                "{sample}/microbiome_out/features.tsv"),
-            read_tsv = os.path.join(
-                config["output"]["profile"],
-                "{sample}/microbiome_out/read_assignment.tsv"),
-        params:
-            bam2mtx_script = config["scripts"]["bam2mtx"],
-        resources:
-            mem_mb=config["resources"]["krak2_matrix_build"]["mem_mb"]
-        log:
-            os.path.join(config["logs"]["classifier"],
-                        "matrix/{sample}_martix_build.log")
-        conda:
-            config["envs"]["kmer_python"]
-        shell:
-            """
-            python {params.bam2mtx_script} --cb_bam {input.unmapped_bam_sorted_file} --align_result {input.em_reads_assign_tsv} --nodes {input.nodes_dump} --names {input.names_dump} --profile_tsv {output.profile_tsv} --matrixfile {output.matrix_file} --cellfile {output.barcode_file} --taxfile {output.feature_file}  --output_read_tsv {output.read_tsv} --log_file {log}
-            """
-
-    rule mm2plus_aligned_all:
-        input:
-            expand(os.path.join(
-                config["output"]["profile"],
-                "{sample}/microbiome_out/read_assignment.tsv"),sample=SAMPLES_ID_LIST)
-else:
-    rule mm2plus_aligned_all:
-        input:
+#     rule mm2plus_aligned_all:
+#         input:
+#             expand(os.path.join(
+#                 config["output"]["profile"],
+#                 "{sample}/microbiome_out/read_assignment.tsv"),sample=SAMPLES_ID_LIST)
+# else:
+#     rule mm2plus_aligned_all:
+#         input:
 
 rule align_all:
     input:
@@ -1008,4 +1024,4 @@ rule align_all:
         rules.bwa_aligned_all.input,
         rules.bwa2_aligned_all.input,
         rules.minimap2_aligned_all.input,
-        rules.mm2plus_aligned_all.input,
+        # rules.mm2plus_aligned_all.input,
