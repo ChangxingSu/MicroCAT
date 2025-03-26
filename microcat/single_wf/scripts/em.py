@@ -116,8 +116,7 @@ def compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op, dict_longest_al
     ref_name, query_name = alignment.reference_name, alignment.query_name
     log_score = sum(list(map(mul, log_p_cigar_op, cigar_stats))) * \
                 (dict_longest_align[query_name]/align_len)
-    # species_tid = int(ref_name.split(":")[0])
-    species_tid = int(acc2tax[ref_name])
+    species_tid = int(seqid2tax_map[ref_name])
     return log_score, query_name, species_tid
 
 def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_zero_locs=None):
@@ -523,28 +522,10 @@ logger.info('Loading longest alignment dictionary', status='done')
 
 # Loading taxonomy database
 logger.info('Loading taxonomy database', status='run')
-acc2tax = {}
-with open(taxonomy_file, "r") as f:
-    for line in f:
-        # skip header
-        if line.startswith("accession"):
-            continue
-            
-        value_list = line.strip().split("\t")
-
-        if len(value_list) == 3:
-            # accession, taxid, _ = value_list[0], value_list[1], value_list[2]
-            acc, accession, taxid = value_list[0], value_list[1], value_list[2]
-        elif len(value_list) == 2:
-            accession, taxid = value_list[0], value_list[1]
-        else:
-            print(f"Invalid taxonomy file format at line: {line}")
-            continue        
-        
-        acc2tax[accession] = int(taxid)
-
-
-logger.info('Loading taxonomy database', status='done')
+# use int for taxid, to accelerate the lookup
+seqid2tax_df = pd.read_csv(taxonomy_file, sep="\t",dtype={'seqid': str, 'taxid': int})
+seqid2tax_map = dict(zip(seqid2tax_df['seqid'], seqid2tax_df['taxid']))
+logger.info(f'Loading taxonomy database with {len(seqid2tax_map)} reference sequences, {seqid2tax_df["taxid"].nunique()} taxa', status='done')
 
 # Calculate log likelihood of reads given sequences
 logger.info('Calculating log likelihood of reads given sequences', status='run')
@@ -555,7 +536,7 @@ log_prob_rgs, counts_unassigned, counts_assigned = log_prob_rgs_dict(
 logger.info('Calculating log likelihood of reads given sequences', status='done')
 
 # Run the EM algorithm
-db_ids = list(acc2tax.values())
+db_ids = list(seqid2tax_map.values())
 n_db = len(db_ids)
 n_reads = len(log_prob_rgs)
 print("Assigned read count: {}\n".format(n_reads))
@@ -624,11 +605,12 @@ tax_id_to_name = {}
 with open(args.ktaxonomy_file, 'r') as kfile:
     for line in kfile:
         [taxid, p_tid, rank, lvl_num, name] = line.strip().split('\t|\t')
-        tax_id_to_name[taxid] = name
+        tax_id_to_name[int(taxid)] = name
 
 # 将结果写入文件
 logger.info(f"开始将read分类结果写入文件: {read_classifications_file}")
 
+# TODO: may be dont need to write species and genus information, which will handle in the bam2mtx.py
 with open(output, 'w', newline='') as f:
     writer = csv.writer(f, delimiter='\t')
     writer.writerow(["Read_Name", "Taxonomy_ID", "Probability", "Species", "Genus"])
