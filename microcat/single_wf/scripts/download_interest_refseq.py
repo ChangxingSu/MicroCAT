@@ -16,6 +16,7 @@ Command line arguments:
     --verbose: Enable detailed print.
     --processors: Number of processors to use for downloading. Default is 1.
     --max_urls_per_taxid: Maximum number of URLs per taxid. Default is 10.
+    --download_gff: Download GFF files along with FNA files. Default is False.
 """
 
 #!/usr/bin/env python3
@@ -94,14 +95,8 @@ def download_genome(row):
     fna_ftp_path = row['URL']
 
     try:
-        gff_ftp_path = fna_ftp_path.replace('genomic.fna.gz', 'genomic.gff.gz')
-        fna_http_path = fna_ftp_path.replace('ftp://', 'http://')
-        gff_http_path = gff_ftp_path.replace('ftp://', 'http://')
-        # Lookup using base_acc for the ftp_path
         fna_name = fna_ftp_path.split('/')[-1]
-        gff_name = gff_ftp_path.split('/')[-1]
         fna_file_path = os.path.join(download_folder, fna_name)
-        gff_file_path = os.path.join(download_folder, gff_name)
         
         # Download fna file
         if not os.path.exists(fna_file_path) or os.stat(fna_file_path).st_size == 0:
@@ -127,25 +122,31 @@ def download_genome(row):
                     if attempts == 3:
                         raise Exception(f"Failed to download {accession} after 3 attempts")
 
-        # Download gff file
-        if not os.path.exists(gff_file_path) or os.stat(gff_file_path).st_size == 0:
-            attempts = 0
-            while attempts < 3:
-                try:
-                    # Download gff file
-                    if download_with_requests(gff_http_path, gff_file_path):
-                        logger.info(f"Successfully downloaded {accession} gff file", status='complete')
-                        break
-                    else:
-                        raise Exception("Download failed")
-                except Exception as e:
-                    logger.error(f"Error downloading {accession} gff: {e}")
-                    attempts += 1
-                    # if have tried 3 times, raise an exception
-                    if attempts == 3:
-                        raise Exception(f"Failed to download {accession} after 3 attempts")
-        else:
-            logger.info(f"Already had {accession} as file {gff_name}", status='complete')
+        # Download gff file only if requested
+        if args.download_gff:
+            gff_ftp_path = fna_ftp_path.replace('genomic.fna.gz', 'genomic.gff.gz')
+            gff_http_path = gff_ftp_path.replace('ftp://', 'http://')
+            gff_name = gff_ftp_path.split('/')[-1]
+            gff_file_path = os.path.join(download_folder, gff_name)
+
+            if not os.path.exists(gff_file_path) or os.stat(gff_file_path).st_size == 0:
+                attempts = 0
+                while attempts < 3:
+                    try:
+                        # Download gff file
+                        if download_with_requests(gff_http_path, gff_file_path):
+                            logger.info(f"Successfully downloaded {accession} gff file", status='complete')
+                            break
+                        else:
+                            raise Exception("Download failed")
+                    except Exception as e:
+                        logger.error(f"Error downloading {accession} gff: {e}")
+                        attempts += 1
+                        # if have tried 3 times, raise an exception
+                        if attempts == 3:
+                            raise Exception(f"Failed to download {accession} after 3 attempts")
+            else:
+                logger.info(f"Already had {accession} as file {gff_name}", status='complete')
             
         return {'success': True, 'path': fna_file_path, 'seqid': seqid, 'taxid': taxid, 'accession': accession}
     
@@ -183,6 +184,8 @@ parser.add_argument('--processors', dest='proc', default=1,
                     help="Number of processors to use to rename genome files")
 parser.add_argument('--max_urls_per_taxid', dest='max_urls_per_taxid', default=5,
                     help="Maximum number of URLs per taxid")
+parser.add_argument('--download_gff', action='store_true', default=False,
+                    help="Download GFF files along with FNA files. Default is False.")
 
 args = parser.parse_args()
 # Set log level based on command line arguments
