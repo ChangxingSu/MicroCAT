@@ -15,6 +15,7 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 import argparse
 import logging
+import re
 
 # Create a logger object
 logger = logging.getLogger('my_logger')
@@ -41,6 +42,303 @@ logger.warning = lambda msg, *args, status=None: custom_log(logging.WARNING, msg
 logger.error = lambda msg, *args, status=None: custom_log(logging.ERROR, msg, *args, status=status)
 logger.debug = lambda msg, *args, status=None: custom_log(logging.DEBUG, msg, *args, status=status)
 
+def get_path_to_root(node):
+    """
+    获取从当前节点到根节点的完整路径
+    
+    Parameters:
+    - node (Tree): 起始节点
+    
+    Returns:
+    - List[Tree]: 从当前节点到根的路径上的所有节点
+    """
+    path = []
+    current = node
+    while current is not None:
+        path.append(current)
+        current = current.parent
+    return path
+    
+def calculate_taxonomic_penalty(taxid2node, taxid1, taxid2, lambda_param=1.0, max_distance=7):
+    """
+    计算两个分类单元之间的分类学距离，并转换为惩罚因子
+    
+    Parameters:
+    - taxid2node (dict): taxid到Tree节点的映射字典
+    - taxid1 (str): 第一个分类单元的taxid
+    - taxid2 (str): 第二个分类单元的taxid
+    - lambda_param (float): 惩罚强度参数
+    - max_distance (int): 最大距离，用于归一化
+    
+    Returns:
+    - float: 惩罚因子 (0-1之间的值)
+    """
+    # 如果taxid相同，无需惩罚
+    if taxid1 == taxid2:
+        return 1.0
+        
+    # 处理taxid为0的情况
+    if taxid1 == "0" or taxid2 == "0":
+        return math.exp(-lambda_param)  # 最大惩罚
+    
+    # 处理taxid不在树中的情况
+    if taxid1 not in taxid2node or taxid2 not in taxid2node:
+        return math.exp(-lambda_param)  # 最大惩罚
+    
+    # 获取对应的Tree节点
+    node1 = taxid2node[taxid1]
+    node2 = taxid2node[taxid2]
+    
+    # 获取到根节点的路径
+    path1 = get_path_to_root(node1)
+    path2 = get_path_to_root(node2)
+    
+    # 找到最近共同祖先
+    lca = None
+    for n1 in path1:
+        for n2 in path2:
+            if n1.taxid == n2.taxid:  # 通过taxid比较而不是对象比较
+                lca = n1
+                break
+        if lca:
+            break
+            
+    if lca is None:
+        return math.exp(-lambda_param)  # 没有共同祖先时最大惩罚
+        
+    # 计算距离
+    dist1 = path1.index(lca)  # node1到LCA的距离
+    dist2 = path2.index(lca)  # node2到LCA的距离
+    distance = dist1 + dist2
+    
+    # 归一化距离并计算惩罚因子
+    normalized_distance = min(distance / max_distance, 1.0)
+    penalty = math.exp(-lambda_param * normalized_distance)
+    
+    return penalty
+
+def precompute_taxonomic_penalties(read_kraken_taxids, log_p_rgs, taxid2node, lambda_param=1.0):
+    """
+    预计算所有读段-物种对的分类学惩罚因子
+    
+    Args:
+        read_kraken_taxids (dict): 读段到Kraken分类ID的映射 {read_id: taxid}
+        log_p_rgs (dict): 读段对应的物种对数似然字典 {read_id: ([taxids], [scores])}
+        taxid2node (dict): 分类ID到分类树节点的映射字典
+        lambda_param (float): 惩罚强度参数
+    
+    Returns:
+        dict: 预计算的惩罚因子字典 {(read_id, candidate_taxid): penalty}
+    """
+    penalty_dict = {}
+    logger.info(f"开始预计算分类学惩罚因子", status="run")
+    
+    # 为了减少重复计算，先计算所有taxid对之间的惩罚
+    taxid_pair_penalties = {}
+    
+    # 收集所有唯一的taxid对
+    unique_pairs = set()
+    for r, (taxids, _) in log_p_rgs.items():
+        if r in read_kraken_taxids:
+            kraken_taxid = str(read_kraken_taxids[r])
+            for candidate_taxid in taxids:
+                unique_pairs.add((kraken_taxid, str(candidate_taxid)))
+    
+    # 预计算所有唯一taxid对的惩罚
+    for kraken_taxid, candidate_taxid in unique_pairs:
+        taxid_pair_penalties[(kraken_taxid, candidate_taxid)] = calculate_taxonomic_penalty(
+            taxid2node, kraken_taxid, candidate_taxid, lambda_param)
+    
+    # 为每个读段和其候选物种计算惩罚
+    for r, (taxids, _) in log_p_rgs.items():
+        if r in read_kraken_taxids:
+            kraken_taxid = str(read_kraken_taxids[r])
+            for candidate_taxid in taxids:
+                candidate_taxid_str = str(candidate_taxid)
+                pair_key = (kraken_taxid, candidate_taxid_str)
+                penalty = taxid_pair_penalties.get(pair_key, 1.0)
+                penalty_dict[(r, candidate_taxid)] = penalty
+    
+    logger.info(f"预计算完成，共{len(penalty_dict)}个读段-物种对", status="done")
+    return penalty_dict
+
+
+#Tree Class 
+#usage: tree node used in constructing taxonomy tree  
+#   includes only taxonomy levels and genomes identified in the Kraken report
+class Tree(object):
+    'Tree node.'
+    def __init__(self,  taxid, name, level_rank, level_num, p_taxid, parent=None,children=None):
+        self.taxid = taxid
+        self.name = name
+        self.level_rank= level_rank
+        self.level_num = int(level_num)
+        self.p_taxid = p_taxid
+        self.all_reads = 0
+        self.lvl_reads = 0
+        #Parent/children attributes
+        self.children = []
+        self.parent = parent
+        if children is not None:
+            for child in children:
+                self.add_child(child)
+    def add_child(self, node):
+        assert isinstance(node,Tree)
+        self.children.append(node)
+        
+    def taxid_to_desired_rank(self, desired_rank):
+        # Check if the current node's level_id matches the desired_rank
+        if self.level_rank == desired_rank:
+            return self.taxid
+        child, parent, parent_taxid = self, None, None
+        while not parent_taxid == '1':
+            parent = child.parent
+            rank = parent.level_rank
+            parent_taxid = parent.taxid
+            if rank == desired_rank:
+                return parent.taxid
+            child = parent # needed for recursion
+        # If no parent node is found, or the desired_rank is not reached, return error
+        return 'error - taxid above desired rank, or not annotated at desired rank'
+    def lineage_to_desired_rank(self, desired_parent_rank):
+        lineage = [] 
+        lineage.append(self.taxid)
+        # Check if the current node's level_id matches the desired_rank
+        if self.level_num == "1":
+            return lineage
+        if self.level_rank == "S":
+            subspecies_nodes = self.children
+            while len(subspecies_nodes) > 0:
+                #For this node
+                curr_n = subspecies_nodes.pop()
+                lineage.append(curr_n.taxid)
+        child, parent, parent_taxid = self, None, None
+        
+        while not parent_taxid == '1':
+            parent = child.parent
+            rank = parent.level_rank
+            parent_taxid = parent.taxid
+            lineage.append(parent_taxid)
+            if rank == desired_parent_rank:
+                return lineage
+            child = parent # needed for recursion
+        return lineage
+
+    def is_microbiome(self):
+        is_microbiome = False
+        main_lvls = ['D', 'P', 'C', 'O', 'F', 'G', 'S']
+        lineage_name = []
+        #Create level name 
+        level_rank = self.level_rank
+        name = self.name
+        name = name.replace(' ','_')
+        lineage_name.append(name)
+        if level_rank not in main_lvls:
+            level_rank = "x"
+        elif level_rank == "K":
+            level_rank = "k"
+        elif level_rank == "D":
+            level_rank = "d"
+        child, parent, parent_taxid = self, None, None
+        
+        while not parent_taxid == '1':
+            parent = child.parent
+            level_rank = parent.level_rank
+            parent_taxid = parent.taxid
+            name = parent.name
+            name = name.replace(' ','_')
+            lineage_name.append(name)
+            child = parent # needed for recursion
+        if 'Fungi' in lineage_name or 'Bacteria' in lineage_name or 'Viruses' in lineage_name:
+            is_microbiome = True
+        return is_microbiome
+
+    def get_mpa_path(self):
+        mpa_path = []
+        main_lvls = ['D', 'P', 'C', 'O', 'F', 'G', 'S']
+        #Create level name 
+        level_rank = self.level_rank
+        name = self.name
+        name = name.replace(' ','_')
+        if level_rank not in main_lvls:
+            level_rank = "x"
+        elif level_rank == "K":
+            level_rank = "k"
+        elif level_rank == "D":
+            level_rank = "d"
+        child, parent, parent_taxid = self, None, None
+        level_str = level_rank.lower() + "__" + name
+        mpa_path.append(level_str)
+
+        while not parent_taxid == '1':
+            parent = child.parent
+            level_rank = parent.level_rank
+            parent_taxid = parent.taxid
+            name = parent.name
+            name = name.replace(' ','_')
+            try:
+                if level_rank not in main_lvls:
+                    level_rank = "x"
+                elif level_rank == "K":
+                    level_rank = "k"
+                elif level_rank == "D":
+                    level_rank = "d"
+                level_str = level_rank.lower() + "__" + name
+                mpa_path.append(level_str)
+            except ValueError:
+                raise
+            child = parent # needed for recursion        
+
+        mpa_path = "|".join(map(str, mpa_path[::-1]))
+        return mpa_path
+
+    def get_taxon_path(self):
+
+        kept_levels = ['D', 'P', 'C', 'O', 'F', 'G', 'S']
+        lineage_taxid = []
+        lineage_name = []
+        name = self.name
+        rank = self.level_rank
+        name = name.replace(' ','_')
+        lineage_taxid.append(self.taxid)
+        lineage_name.append(name)
+        child, parent = self, None
+        while not rank == 'D':
+            parent = child.parent
+            rank = parent.level_rank
+            parent_taxid = parent.taxid
+            name = parent.name
+            name = name.replace(' ','_')
+            if rank in kept_levels:
+                lineage_taxid.append(parent_taxid)
+                lineage_name.append(name)
+            child = parent # needed for recursion
+        taxid_path = "|".join(map(str, lineage_taxid[::-1]))
+        taxsn_path = "|".join(map(str, lineage_name[::-1]))
+        return [taxid_path, taxsn_path]
+
+def make_dicts(ktaxonomy_file):
+    #Parse taxonomy file 
+    root_node = -1
+    taxid2node = {}
+    with open(ktaxonomy_file, 'r') as kfile:
+        for line in kfile:
+            [taxid, p_tid, rank, lvl_num, name] = line.strip().split('\t|\t')
+            curr_node = Tree(taxid, name, rank, lvl_num, p_tid)
+            taxid2node[taxid] = curr_node
+            #set parent/kids
+            if taxid == "1":
+                root_node = curr_node
+            else:
+                curr_node.parent = taxid2node[p_tid]
+                taxid2node[p_tid].add_child(curr_node)
+            #set parent/kids
+            if taxid == "1":
+                root_node = curr_node
+            else:
+                curr_node.parent = taxid2node[p_tid]
+                taxid2node[p_tid].add_child(curr_node)            
+    return taxid2node
 
 def get_align_stats(alignment):
     """Retrieve list of inquired cigar stats (I,D,S,X) for alignment
@@ -178,6 +476,7 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
                                                  log_p_rgs[query_name][1] + [log_score])
                     else:
                         logprgs_idx = log_p_rgs[query_name][0].index(species_tid)
+                        # keep the highest log_score
                         if log_p_rgs[query_name][1][logprgs_idx] < log_score:
                             log_p_rgs[query_name][1][logprgs_idx] = log_score
             else:
@@ -195,15 +494,18 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
     return log_p_rgs, unassigned_count, len(assigned_reads)
 
 
-def expectation_maximization_iterations(log_p_rgs, freq, lli_thresh, input_threshold, save_iterations=None):
+def expectation_maximization_iterations(log_p_rgs, freq, lli_thresh, input_threshold, read_kraken_taxids=None, taxid2node=None, lambda_param=1.0, save_iterations=None):
     """
-    执行EM算法迭代，包含迭代质量保持阈值步骤以解决长尾效应
+    执行EM算法迭代，包含迭代质量保持阈值步骤以解决长尾效应，并加入Kraken2分类学惩罚
     
     Args:
         log_p_rgs: 读段对应的物种对数似然字典 {read_id: ([taxids], [scores])}
         freq: 初始物种丰度估计
         lli_thresh: 对数似然增量阈值
         input_threshold: 物种丰度阈值
+        read_kraken_taxids: 读段到Kraken分类ID的映射字典 {read_id: taxid}
+        taxid2node: 分类ID到分类树节点的映射字典
+        lambda_param: 惩罚强度参数
         save_iterations: 需要保存结果的迭代次数列表，例如[1,5,10,15,20]，默认为None
     
     Returns:
@@ -218,6 +520,14 @@ def expectation_maximization_iterations(log_p_rgs, freq, lli_thresh, input_thres
     
     # 初始化用于保存迭代结果的字典
     iteration_results = {}
+    
+    # 如果有Kraken分类信息和分类树信息，预计算惩罚因子
+    penalty_dict = {}
+    if read_kraken_taxids and taxid2node:
+        logger.info("预计算分类学惩罚因子", status="run")
+        penalty_dict = precompute_taxonomic_penalties(
+            read_kraken_taxids, log_p_rgs, taxid2node, lambda_param)
+        logger.info(f"预计算完成，共{len(penalty_dict)}个惩罚因子", status="done")
     
     # 初始化物种有效性标记
     strain_valid = {strain: True for strain in freq}
@@ -269,13 +579,21 @@ def expectation_maximization_iterations(log_p_rgs, freq, lli_thresh, input_thres
             p_r = {}  # 归一化概率p(s|r)
             max_log_p = -float('inf')
             
-            # 找出最大对数概率以防数值溢出
+            # 应用分类学惩罚并找出最大对数概率
             for i in valid_indices:
                 g = taxids[i]
                 log_p = log_scores[i]
-                # 防止对数计算错误
+                
+                # 如果有预计算的惩罚因子，应用它
+                penalty = 1.0
+                if (r, g) in penalty_dict:
+                    penalty = penalty_dict[(r, g)]
+                
                 try:
-                    log_value = log_p + math.log(max(freq[g], 1e-300))
+                    # 加上log(penalty)到对数似然
+                    log_penalty = math.log(max(penalty, 1e-300))
+                    log_value = log_p + math.log(max(freq[g], 1e-300)) + log_penalty
+                    print(f"log_value: {log_value}, log_p: {log_p}, freq[g]: {math.log(max(freq[g], 1e-300))}, penalty: {log_penalty}")
                     if log_value > max_log_p:
                         max_log_p = log_value
                 except ValueError:
@@ -293,8 +611,15 @@ def expectation_maximization_iterations(log_p_rgs, freq, lli_thresh, input_thres
             for i in valid_indices:
                 g = taxids[i]
                 log_p = log_scores[i]
+                
+                # 应用分类学惩罚
+                penalty = 1.0
+                if (r, g) in penalty_dict:
+                    penalty = penalty_dict[(r, g)]
+                
                 try:
-                    log_num = log_p + math.log(max(freq[g], 1e-300)) - max_log_p
+                    log_penalty = math.log(max(penalty, 1e-300))
+                    log_num = log_p + math.log(max(freq[g], 1e-300)) + log_penalty - max_log_p
                     if first:
                         log_denom = log_num
                         first = False
@@ -308,8 +633,15 @@ def expectation_maximization_iterations(log_p_rgs, freq, lli_thresh, input_thres
             for i in valid_indices:
                 g = taxids[i]
                 log_p = log_scores[i]
+                
+                # 应用分类学惩罚
+                penalty = 1.0
+                if (r, g) in penalty_dict:
+                    penalty = penalty_dict[(r, g)]
+                
                 try:
-                    log_num = log_p + math.log(max(freq[g], 1e-300)) - max_log_p
+                    log_penalty = math.log(max(penalty, 1e-300))
+                    log_num = log_p + math.log(max(freq[g], 1e-300)) + log_penalty - max_log_p
                     p_r[g] = math.exp(log_num - log_denom)
                     strain_read_count[g] += p_r[g]
                 except (ValueError, OverflowError):
@@ -480,160 +812,195 @@ CIGAR_OPS = [1, 2, 4, 10]
 CIGAR_OPS_ALL = [0, 1, 2, 4]
 
 
-# 添加参数解析
-parser = argparse.ArgumentParser(description='执行EM算法进行物种丰度估计')
-parser.add_argument('--bam_file', required=True, help='BAM文件路径')
-parser.add_argument('--taxonomy_file', required=True, help='分类文件路径')
-parser.add_argument('--output', required=True, help='输出文件路径')
-parser.add_argument('--ktaxonomy_file', required=True, help='Kraken2 ktaxonomy file')
-# parser.add_argument('--log_level', default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], help='日志级别')
-parser.add_argument('--log_file', default='emu_em.log', help='日志文件路径')
-parser.add_argument('--verbose', action='store_true', help='是否输出详细日志信息')
-parser.add_argument('--save_iterations', type=str, help='要保存的迭代结果，逗号分隔的数字，例如 "1,5,10,15,20"')
-parser.add_argument('--iteration_output', help='迭代结果输出目录')
-args = parser.parse_args()
+# Move all execution code inside this condition
+if __name__ == "__main__":
+    # 添加参数解析
+    parser = argparse.ArgumentParser(description='执行EM算法进行物种丰度估计')
+    parser.add_argument('--bam_file', required=True, help='BAM文件路径')
+    parser.add_argument('--taxonomy_file', required=True, help='分类文件路径')
+    parser.add_argument('--output', required=True, help='输出文件路径')
+    parser.add_argument('--kraken_output', required=True, help='kraken输出文件路径')
+    parser.add_argument('--ktaxonomy_file', required=True, help='Kraken2 ktaxonomy file')
+    # parser.add_argument('--log_level', default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], help='日志级别')
+    parser.add_argument('--log_file', default='emu_em.log', help='日志文件路径')
+    parser.add_argument('--verbose', action='store_true', help='是否输出详细日志信息')
+    parser.add_argument('--save_iterations', type=str, help='要保存的迭代结果，逗号分隔的数字，例如 "1,5,10,15,20"')
+    parser.add_argument('--iteration_output', help='迭代结果输出目录')
+    args = parser.parse_args()
 
-# Set log level based on command line arguments
-if args.verbose:
-    logger.setLevel(logging.DEBUG)
-else:
-    logger.setLevel(logging.INFO)
+    # Set log level based on command line arguments
+    if args.verbose:
+        logger.setLevel(logging.DEBUG)
+    else:
+        logger.setLevel(logging.INFO)
 
-# Create a file handler and add the formatter to it
-file_handler = logging.FileHandler(args.log_file)  # Output logs to the specified file
-file_handler.setFormatter(log_format)
-logger.addHandler(file_handler)
-
-
-bam_file = args.bam_file
-taxonomy_file = args.taxonomy_file
-output = args.output
-read_classifications_file = output
-# log_level = args.log_level
-
-# Load the BAM file
-logger.info('Loading BAM file', status='run')
-log_prob_cigar_op, locs_p_cigar_zero, longest_align_dict = get_cigar_op_log_probabilities(bam_file)
-
-logger.info('Loading log probabilities of CIGAR operations', status='done')
-logger.info('Loading zero locations', status='done')
-logger.info('Loading longest alignment dictionary', status='done')
+    # Create a file handler and add the formatter to it
+    file_handler = logging.FileHandler(args.log_file)  # Output logs to the specified file
+    file_handler.setFormatter(log_format)
+    logger.addHandler(file_handler)
 
 
-# Loading taxonomy database
-logger.info('Loading taxonomy database', status='run')
-# use int for taxid, to accelerate the lookup
-seqid2tax_df = pd.read_csv(taxonomy_file, sep="\t",dtype={'seqid': str, 'taxid': int})
-seqid2tax_map = dict(zip(seqid2tax_df['seqid'], seqid2tax_df['taxid']))
-logger.info(f'Loading taxonomy database with {len(seqid2tax_map)} reference sequences, {seqid2tax_df["taxid"].nunique()} taxa', status='done')
+    bam_file = args.bam_file
+    taxonomy_file = args.taxonomy_file
+    output = args.output
+    read_classifications_file = output
+    # log_level = args.log_level
 
-# Calculate log likelihood of reads given sequences
-logger.info('Calculating log likelihood of reads given sequences', status='run')
-log_prob_rgs, counts_unassigned, counts_assigned = log_prob_rgs_dict(
-    bam_file, log_prob_cigar_op, longest_align_dict, locs_p_cigar_zero)
+    # Load the BAM file
+    logger.info('Loading BAM file', status='run')
+    log_prob_cigar_op, locs_p_cigar_zero, longest_align_dict = get_cigar_op_log_probabilities(bam_file)
 
-
-logger.info('Calculating log likelihood of reads given sequences', status='done')
-
-# Run the EM algorithm
-db_ids = list(seqid2tax_map.values())
-n_db = len(db_ids)
-n_reads = len(log_prob_rgs)
-print("Assigned read count: {}\n".format(n_reads))
-# check if there are enough reads
+    logger.info('Loading log probabilities of CIGAR operations', status='done')
+    logger.info('Loading zero locations', status='done')
+    logger.info('Loading longest alignment dictionary', status='done')
 
 
-freq, counter = dict.fromkeys(db_ids, 1 / n_db), 1
+    # Loading taxonomy database
+    logger.info('Loading taxonomy database', status='run')
+    # use int for taxid, to accelerate the lookup
+    seqid2tax_df = pd.read_csv(taxonomy_file, sep="\t",dtype={'seqid': str, 'taxid': int})
+    seqid2tax_map = dict(zip(seqid2tax_df['seqid'], seqid2tax_df['taxid']))
+    logger.info(f'Loading taxonomy database with {len(seqid2tax_map)} reference sequences, {seqid2tax_df["taxid"].nunique()} taxa', status='done')
 
-# 处理迭代保存参数
-if args.save_iterations:
-    save_iterations = [int(x) for x in args.save_iterations.split(',')]
-    logger.info(f"将保存以下迭代次数的结果: {save_iterations}")
-else:
-    save_iterations = None
+    # Calculate log likelihood of reads given sequences
+    logger.info('Calculating log likelihood of reads given sequences', status='run')
+    log_prob_rgs, counts_unassigned, counts_assigned = log_prob_rgs_dict(
+        bam_file, log_prob_cigar_op, longest_align_dict, locs_p_cigar_zero)
 
-# 运行EM算法并获取迭代结果
-logger.info('Running EM algorithm', status='run')
-f_full, f_set_thresh, read_dist, iteration_results = expectation_maximization_iterations(
-    log_prob_rgs, freq, 0.01, 0.00001, save_iterations)
 
-print(f"Number of EM iterations: {counter}\n")
-print(f"Number of species in f_full: {len(f_full)}")
+    logger.info('Calculating log likelihood of reads given sequences', status='done')
+
+    # Run the EM algorithm
+    db_ids = list(seqid2tax_map.values())
+    n_db = len(db_ids)
+    n_reads = len(log_prob_rgs)
+    print("Assigned read count: {}\n".format(n_reads))
+    # check if there are enough reads
+
+
+    freq, counter = dict.fromkeys(db_ids, 1 / n_db), 1
+
+    # 处理迭代保存参数
+    if args.save_iterations:
+        save_iterations = [int(x) for x in args.save_iterations.split(',')]
+        logger.info(f"将保存以下迭代次数的结果: {save_iterations}")
+    else:
+        save_iterations = None
+
+    # 在解析完BAM文件和分类数据库后
+    # 加载Kraken分类结果
+    logger.info('加载Kraken分类结果', status='run')
+    read_kraken_taxids = {}
+
+    # 假设我们从参数中获取kraken输出文件路径
+    if args.kraken_output:
+        with open(args.kraken_output, 'r') as kfile:
+            for kraken_line in kfile:
+                try:
+                    read_type, query_name, taxid_info, read_len, kmer_position = kraken_line.strip().split('\t')
+                    if read_type == "C":  # 只处理已分类的读段
+                        kread_taxid = re.search(r'\(taxid (\d+)\)', taxid_info).group(1)
+                        read_kraken_taxids[query_name] = int(kread_taxid)
+                except (ValueError, AttributeError) as e:
+                    logger.error(f"处理Kraken输出时出错: {e}")
+                    continue
+        logger.info(f'成功加载{len(read_kraken_taxids)}个Kraken分类结果', status='done')
+    else:
+        logger.info('未提供Kraken输出文件，将不使用分类学惩罚', status='warning')
+
+    # 构建分类树
+    taxid2node = {}
+    # 这里需要添加构建分类树的代码，类似于extract_specific_kraken_reads.py中的make_dicts函数
+    logger.info('Parsing taxonmy full lineage infomation from Kraken ktaxonomy', status='run')
+    try:
+        taxid2node = make_dicts(args.ktaxonomy_file)
+        logger.info('Successfully parsing taxonmy full lineage infomation from Kraken ktaxonomy', status='complete')
+    except:
+        logger.error("Couldn't get the taxonmy full lineage infomation from NCBI nodes.dump")
+        sys.exit()
+
+
+    # 在调用EM算法时传入Kraken分类信息和分类树
+    f_full, f_set_thresh, read_dist, iteration_results = expectation_maximization_iterations(
+        log_prob_rgs, freq, 0.01, 0.00001, read_kraken_taxids, taxid2node, 1.0, save_iterations)
+
+    print(f"Number of EM iterations: {counter}\n")
+    print(f"Number of species in f_full: {len(f_full)}")
                                                                       
-# results_df = pd.DataFrame(zip(list(f_full.keys()) + ['unassigned'],
-#                                 list(f_full.values()) + [0]),
-#                             columns=["tax_id", "abundance"])
+    # results_df = pd.DataFrame(zip(list(f_full.keys()) + ['unassigned'],
+    #                                 list(f_full.values()) + [0]),
+    #                             columns=["tax_id", "abundance"])
 
-# print(results_df)
+    # print(results_df)
 
-# results_df.to_csv(output, sep="\t", index=False)
+    # results_df.to_csv(output, sep="\t", index=False)
 
-logger.info('EM算法完成,开始处理read分类', status='run')
+    logger.info('EM算法完成,开始处理read分类', status='run')
 
-# 创建输出目录（如果不存在）
-# output_dir = os.path.dirname(args.output)
-# read_classifications_file = os.path.join(output_dir, "read_classifications.tsv")
+    # 创建输出目录（如果不存在）
+    # output_dir = os.path.dirname(args.output)
+    # read_classifications_file = os.path.join(output_dir, "read_classifications.tsv")
 
-# 为每个read分配最可能的分类并直接写入文件
-logger.info(f"开始将read分类结果写入文件: {read_classifications_file}")
+    # 为每个read分配最可能的分类并直接写入文件
+    logger.info(f"开始将read分类结果写入文件: {read_classifications_file}")
 
-# print(read_dist.keys())
-# with open(read_classifications_file, 'w', newline='') as f:
-#     writer = csv.writer(f, delimiter='\t')
-#     writer.writerow(["Read_Name", "Taxonomy_ID", "Probability"])
+    # print(read_dist.keys())
+    # with open(read_classifications_file, 'w', newline='') as f:
+    #     writer = csv.writer(f, delimiter='\t')
+    #     writer.writerow(["Read_Name", "Taxonomy_ID", "Probability"])
     
-#     for (read_name, tax_id), prob in read_dist.items():
-#         if read_name not in read_classifications or prob > read_classifications[read_name][1]:
-#             read_classifications[read_name] = (tax_id, prob)
-#             writer.writerow([read_name, tax_id, prob])
-# 为每个read选择最高概率的分类
-best_classifications = {}
-# 修复这段代码，正确解析read_dist结构
-for read_name, tax_probs in read_dist.items():
-    best_tax_id = None
-    best_prob = -1
-    for tax_id, prob in tax_probs.items():
-        if prob > best_prob:
-            best_tax_id = tax_id
-            best_prob = prob
-    if best_tax_id is not None:
-        best_classifications[read_name] = (best_tax_id, best_prob)
+    #     for (read_name, tax_id), prob in read_dist.items():
+    #         if read_name not in read_classifications or prob > read_classifications[read_name][1]:
+    #             read_classifications[read_name] = (tax_id, prob)
+    #             writer.writerow([read_name, tax_id, prob])
+    # 为每个read选择最高概率的分类
+    best_classifications = {}
+    # 修复这段代码，正确解析read_dist结构
+    for read_name, tax_probs in read_dist.items():
+        best_tax_id = None
+        best_prob = -1
+        for tax_id, prob in tax_probs.items():
+            if prob > best_prob:
+                best_tax_id = tax_id
+                best_prob = prob
+        if best_tax_id is not None:
+            best_classifications[read_name] = (best_tax_id, best_prob)
 
 
-# a very simple taxonomy name parser
-tax_id_to_name = {}
-with open(args.ktaxonomy_file, 'r') as kfile:
-    for line in kfile:
-        [taxid, p_tid, rank, lvl_num, name] = line.strip().split('\t|\t')
-        tax_id_to_name[int(taxid)] = name
+    # a very simple taxonomy name parser
+    tax_id_to_name = {}
+    with open(args.ktaxonomy_file, 'r') as kfile:
+        for line in kfile:
+            [taxid, p_tid, rank, lvl_num, name] = line.strip().split('\t|\t')
+            tax_id_to_name[int(taxid)] = name
 
-# 将结果写入文件
-logger.info(f"开始将read分类结果写入文件: {read_classifications_file}")
+    # 将结果写入文件
+    logger.info(f"开始将read分类结果写入文件: {read_classifications_file}")
 
-# TODO: may be dont need to write species and genus information, which will handle in the bam2mtx.py
-with open(output, 'w', newline='') as f:
-    writer = csv.writer(f, delimiter='\t')
-    writer.writerow(["Read_Name", "Taxonomy_ID", "Probability", "Species", "Genus"])
-    
-    for read_name, (tax_id, prob) in best_classifications.items():
-        tax_name = tax_id_to_name.get(tax_id, "Unknown")
-        tax_genus = tax_name.split(" ")[0] if tax_name != "Unknown" else "Unknown"
-        writer.writerow([read_name, tax_id, prob, tax_name, tax_genus])
-
-
-# 如果指定了迭代输出目录，则保存每个迭代的结果
-if args.iteration_output and save_iterations:
-    os.makedirs(args.iteration_output, exist_ok=True)
-    for iter_num, iter_freq in iteration_results.items():
-        iter_output_file = os.path.join(args.iteration_output, f"em_iteration_{iter_num}.tsv")
-        # 将迭代结果转换为DataFrame并保存
-        iter_df = pd.DataFrame([(tax_id, abundance) for tax_id, abundance in iter_freq.items() if abundance > 0],
-                                columns=["tax_id", "abundance"])
+    # TODO: may be dont need to write species and genus information, which will handle in the bam2mtx.py
+    with open(output, 'w', newline='') as f:
+        writer = csv.writer(f, delimiter='\t')
+        writer.writerow(["Read_Name", "Taxonomy_ID", "Probability", "Species", "Genus"])
         
-        # 添加物种名称
-        iter_df["species"] = iter_df["tax_id"].apply(lambda x: tax_id_to_name.get(x, "Unknown"))
-        iter_df.sort_values("abundance", ascending=False, inplace=True)
-        
-        iter_df.to_csv(iter_output_file, sep="\t", index=False)
-        logger.info(f"保存迭代{iter_num}的结果到: {iter_output_file}", status="done")
-logger.info(f"Read分类结果已保存到文件: {read_classifications_file}")
+        for read_name, (tax_id, prob) in best_classifications.items():
+            tax_name = tax_id_to_name.get(tax_id, "Unknown")
+            tax_genus = tax_name.split(" ")[0] if tax_name != "Unknown" else "Unknown"
+            writer.writerow([read_name, tax_id, prob, tax_name, tax_genus])
+
+
+    # 如果指定了迭代输出目录，则保存每个迭代的结果
+    if args.iteration_output and save_iterations:
+        os.makedirs(args.iteration_output, exist_ok=True)
+        for iter_num, iter_freq in iteration_results.items():
+            iter_output_file = os.path.join(args.iteration_output, f"em_iteration_{iter_num}.tsv")
+            # 将迭代结果转换为DataFrame并保存
+            iter_df = pd.DataFrame([(tax_id, abundance) for tax_id, abundance in iter_freq.items() if abundance > 0],
+                                    columns=["tax_id", "abundance"])
+            
+            # 添加物种名称
+            iter_df["species"] = iter_df["tax_id"].apply(lambda x: tax_id_to_name.get(x, "Unknown"))
+            iter_df.sort_values("abundance", ascending=False, inplace=True)
+            
+            iter_df.to_csv(iter_output_file, sep="\t", index=False)
+            logger.info(f"保存迭代{iter_num}的结果到: {iter_output_file}", status="done")
+    logger.info(f"Read分类结果已保存到文件: {read_classifications_file}")
