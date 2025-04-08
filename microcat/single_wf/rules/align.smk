@@ -2,7 +2,7 @@ from math import ceil
 import glob
 import os
 
-localrules: download_taxdump, download_candidate_species
+localrules: download_candidate_species
 
 def get_fna_chunks(wildcards):
     # Get the file path
@@ -31,58 +31,11 @@ def get_db_chunk_alignments(wildcards):
         chunk_num=glob_wildcards(os.path.join(split_dir, "chunk_{chunk_num}.fna")).chunk_num
     )
 
-
-# rule download_taxdump:
-#     input:
-#         candidate_species =  os.path.join(
-#                 config["output"]["classifier"],
-#                 "rmhost_kraken2_qc/study/krak_candidate_species.txt"),
-#     output:
-#         assembly_summary = expand(os.path.join(
-#             config["params"]["align"]["download_dir"],
-#             "taxonomy/{domain}_assembly_summary.txt"),
-#             domain=['bacteria','fungi','viral','archaea']),
-#         taxdump = expand(os.path.join(
-#             config["params"]["align"]["download_dir"],
-#             "taxonomy/{taxdump}"),
-#             taxdump=["names.dmp", "nodes.dmp","merged.dmp"]),
-#     params:
-#         taxonomy_folder = os.path.join(
-#             config["params"]["align"]["download_dir"],
-#             "taxonomy"),
-#     resources:
-#         mem_mb = 1000,
-#     threads:
-#         1
-#     run:
-#         import os
-#         import pandas as pd
-
-#         domains = ['bacteria','archaea','fungi','viral']
-
-#         for domain in domains:
-#             if not os.path.exists(os.path.join(params.taxonomy_folder,str(domain)+"_assembly_summary.txt")):
-#                 shell("wget -q https://ftp.ncbi.nlm.nih.gov/genomes/refseq/{domain}/assembly_summary.txt -O {params.taxonomy_folder}/{domain}_assembly_summary.txt")
-#                 print(f"{domain} assembly summary downloaded successfully.")
-
-#         shell("wget -q https://ftp.ncbi.nih.gov/pub/taxonomy/new_taxdump/new_taxdump.tar.gz -O {params.taxonomy_folder}/new_taxdump.tar.gz")
-#         shell("tar -xf {params.taxonomy_folder}/new_taxdump.tar.gz -C {params.taxonomy_folder}")
-#         if os.path.exists(os.path.join(params.taxonomy_folder, "new_taxdump.tar.gz")): 
-#             os.remove(os.path.join(params.taxonomy_folder, "new_taxdump.tar.gz"))
-
 rule download_candidate_species:
     input:
         candidate_species =  os.path.join(
                 config["output"]["classifier"],
                 "rmhost_kraken2_qc/study/krak_candidate_species.txt"),
-        assembly_summary = expand(os.path.join(
-            config["params"]["align"]["download_dir"],
-            "taxonomy/{domain}_assembly_summary.txt"),
-            domain=['bacteria','fungi','viral','archaea']),
-        taxdump = expand(os.path.join(
-            config["params"]["align"]["download_dir"],
-            "taxonomy/{taxdump}"),
-            taxdump=["names.dmp", "nodes.dmp","merged.dmp"]),
         library_report_path = os.path.join(
             config["params"]["classifier"]["kraken2uniq"]["kraken2_database"],
                                     "library_report.tsv"),
