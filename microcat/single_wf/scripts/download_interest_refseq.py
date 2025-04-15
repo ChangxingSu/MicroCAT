@@ -93,9 +93,10 @@ def download_genome(row):
     taxid = row['taxid']
     accession = row['accession']
     fna_ftp_path = row['URL']
-
+    # here we use the http path to download the fna file
+    fna_http_path = fna_ftp_path.replace('ftp://', 'http://')
     try:
-        fna_name = fna_ftp_path.split('/')[-1]
+        fna_name = fna_http_path.split('/')[-1]
         fna_file_path = os.path.join(download_folder, fna_name)
         
         # Download fna file
@@ -110,7 +111,7 @@ def download_genome(row):
             while attempts < 3:
                 try:
                     # Replace wget with requests
-                    if download_with_requests(fna_ftp_path, fna_file_path):
+                    if download_with_requests(fna_http_path, fna_file_path):
                         logger.info(f"Successfully downloaded {accession} fna file", status='complete')
                         break
                     else:
@@ -124,9 +125,9 @@ def download_genome(row):
 
         # Download gff file only if requested
         if args.download_gff:
-            gff_ftp_path = fna_ftp_path.replace('genomic.fna.gz', 'genomic.gff.gz')
-            gff_http_path = gff_ftp_path.replace('ftp://', 'http://')
-            gff_name = gff_ftp_path.split('/')[-1]
+            gff_http_path = fna_http_path.replace('genomic.fna.gz', 'genomic.gff.gz')
+            # gff_http_path = gff_ftp_path.replace('ftp://', 'http://')
+            gff_name = gff_http_path.split('/')[-1]
             gff_file_path = os.path.join(download_folder, gff_name)
 
             if not os.path.exists(gff_file_path) or os.stat(gff_file_path).st_size == 0:
@@ -434,8 +435,12 @@ def main():
     # save the accession to taxid mapping as a tsv file
     selected_library_report[['seqid','taxid']].to_csv(args.acc2tax, index=False, sep="\t")
     
-    # finish
-    logger.info(f"Successfully processed {len(already_added_genomes)} genomes, completed ratio {len(already_added_genomes)/len(selected_genome_set) * 100}%", status='complete')
+    # TODO: the error cutoff select
+    if len(already_added_genomes)/len(selected_genome_set) != 1:
+        logger.warning(f"Only {len(already_added_genomes)/len(selected_genome_set) * 100}% of the selected genomes were added to the library file", status='check')
+        sys.exit(1)
+    else:
+        logger.info(f"Successfully processed {len(already_added_genomes)} genomes, completed ratio {len(already_added_genomes)/len(selected_genome_set) * 100}%", status='complete')
 
 if __name__ == "__main__":
     freeze_support()   # required to use multiprocessing
