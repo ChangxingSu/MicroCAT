@@ -110,7 +110,7 @@ def download_genome(row):
             while attempts < 3:
                 try:
                     # Replace wget with requests
-                    if download_with_requests(fna_http_path, fna_file_path):
+                    if download_with_requests(fna_ftp_path, fna_file_path):
                         logger.info(f"Successfully downloaded {accession} fna file", status='complete')
                         break
                     else:
