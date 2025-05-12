@@ -461,6 +461,12 @@ def main():
     read_taxid_info_dict = dict()
     taxid_info_dict = dict()
     with open(args.align_result, "r") as taxa_file:
+        # Skip header line if present
+        header = next(taxa_file, None)
+        if header is None:
+            logger.warning(f"Alignment result file {args.align_result} is empty.", status='warning')
+            # Optionally exit if the file is completely empty
+            # sys.exit(f"Error: Alignment result file {args.align_result} is empty.")
 
         for line in taxa_file:
             total_count += 1
@@ -474,7 +480,19 @@ def main():
                 taxid_info_dict[tax_id] = tax_name
 
                 use_count +=1
-
+    # Check if any usable reads were found
+    if use_count == 0:
+        logger.error(f"No usable alignment results found in {args.align_result}. Cannot proceed.", status='error')
+        # Create empty output files to satisfy downstream dependencies if necessary
+        logger.info("Creating empty output files.", status='run')
+        open(args.matrixfile, 'w').close()
+        open(args.cellfile, 'w').close()
+        open(args.taxfile, 'w').close()
+        open(args.profile_tsv, 'w').close()
+        if args.output_read_tsv:
+             open(args.output_read_tsv, 'w').close()
+        logger.info("Empty output files created. Exiting.", status='complete')
+        sys.exit(0) # Exit gracefully
     logger.info(f'Prasing bam file complete, total reads: {total_count}, use reads: {use_count}, failed reads: {failed_count}, failed rate: {failed_count/total_count}', status='complete')
 
     logger.info('Checking barcode bam file type', status='run')
