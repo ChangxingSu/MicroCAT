@@ -77,7 +77,7 @@ rule download_candidate_species:
         --acc2tax {output.acc2tax} \
         --processors {threads} \
         '''
-
+# TODO: Add bowtie2 em alignment
 if config["params"]["align"]["bowtie2"]["do"]:
     rule bowtie2_build_Index:
         output:
@@ -327,9 +327,6 @@ if config["params"]["align"]["bwa2"]["do"]:
                 config["params"]["align"]["download_dir"],
                 "library",f"{config['params']['project']}.fna"),
         output:
-            # chunk_fna = temp(os.path.join(
-            #     config["params"]["align"]["download_dir"],
-            #     "library",config['params']['project'],"chunk_{chunk_num}.fna")),
             chunk_total = os.path.join(
                 config["params"]["align"]["download_dir"],
                 "library",config['params']['project'],"chunk_num.txt"),
@@ -493,7 +490,13 @@ if config["params"]["align"]["bwa2"]["do"]:
                 "acc2tax/",f"{config['params']['project']}_acc2tax.txt"),
             ktaxonomy_file = os.path.join(
                 config["params"]["classifier"]["kraken2uniq"]["kraken2_database"],
-                "ktaxonomy.tsv")
+                "ktaxonomy.tsv"),
+            krak_sample_denosing_result = os.path.join(
+                config["output"]["classifier"],
+                "rmhost_kraken2_qc/{sample}/{sample}_krak_sample_denosing.txt"),
+            krak2_extracted_output = os.path.join(
+                config["output"]["classifier"],
+                "rmhost_extracted_classified_output/{sample}/{sample}_kraken2_extracted_classified_output.txt"),  
         output:
             em_reads_assign_tsv = os.path.join(
                 config["output"]["classifier"],"bwa_align/{sample}/Aligned.BWA.sortedByCoord.out.em_reads_assign.tsv"),
@@ -511,7 +514,7 @@ if config["params"]["align"]["bwa2"]["do"]:
             config["envs"]["kmer_python"]
         log:
             os.path.join(config["logs"]["classifier"],
-                        "sam2lca/{sample}_sam2lca.log")
+                        "bwa2/{sample}/bwa2_em_assignment.log")
         shell:
             """
             python {params.em_script} \
@@ -519,6 +522,8 @@ if config["params"]["align"]["bwa2"]["do"]:
             --taxonomy_file {input.acc2tax} \
             --output {output.em_reads_assign_tsv} \
             --ktaxonomy_file {input.ktaxonomy_file} \
+            --kraken_output {input.krak2_extracted_output} \
+            --kraken_qc {input.krak_sample_denosing_result} \
             --log_file {log}
             """
     rule bwa2_matrix_build:
@@ -571,9 +576,6 @@ if config["params"]["align"]["bwa2"]["do"]:
             """
     rule bwa2_aligned_all:
         input:
-            # expand(os.path.join(
-            #     config["output"]["profile"],
-            #     "{sample}/microbiome_out/microbiome_profile.tsv"),sample=SAMPLES_ID_LIST)
             expand(os.path.join(
                 config["output"]["profile"],
                 "{sample}/microbiome_out/read_assignment.tsv"),sample=SAMPLES_ID_LIST)
@@ -683,8 +685,8 @@ if config["params"]["align"]["minimap2"]["do"]:
         benchmark:
             os.path.join(config["benchmarks"]["classifier"],
                 "minimap2/{sample}/minimap2_assigned.tsv")
-        conda:
-            config["envs"]["kmer_python"]
+        # conda:
+        #     config["envs"]["kmer_python"]
         log:
             os.path.join(config["logs"]["classifier"],
                         "sam2lca/{sample}_sam2lca.log")
@@ -725,8 +727,8 @@ if config["params"]["align"]["minimap2"]["do"]:
         log:
             os.path.join(config["logs"]["classifier"],
                         "matrix/{sample}_martix_build.log")
-        conda:
-            config["envs"]["kmer_python"]
+        # conda:
+        #     config["envs"]["kmer_python"]
         shell:
             """
             python {params.bam2mtx_script} --cb_bam {input.unmapped_bam_sorted_file} --align_bam {input.lca_bam} --nodes {input.nodes_dump} --names {input.names_dump} --profile_tsv {output.profile_tsv} --matrixfile {output.matrix_file} --cellfile {output.barcode_file} --taxfile {output.feature_file}  --log_file {log}
