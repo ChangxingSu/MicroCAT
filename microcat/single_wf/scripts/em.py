@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from operator import add
 import math
 import pysam
+import sys
 import numpy as np
 import pandas as pd
 from Bio import SeqIO
@@ -32,11 +33,21 @@ logger.addHandler(console_handler)
 
 # Customize logger.info function to include status
 def custom_log(level, msg, *args, status=None):
+    """
+    Custom logging function that includes an optional status message.
+
+    Args:
+        level (int): Logging level (e.g., logging.INFO).
+        msg (str): The main log message.
+        *args: Arguments for the log message formatting.
+        status (str, optional): An optional status indicator (e.g., 'run', 'done', 'error'). Defaults to None.
+    """
     if status:
         msg = f'({status}) {msg}'  # Concatenate the message and status
     logger.log(level, msg, *args)
 
 # Bind the custom_log function to the logger object for different log levels
+# This allows calling logger.info(..., status='run') etc.
 logger.info = lambda msg, *args, status=None: custom_log(logging.INFO, msg, *args, status=status)
 logger.warning = lambda msg, *args, status=None: custom_log(logging.WARNING, msg, *args, status=status)
 logger.error = lambda msg, *args, status=None: custom_log(logging.ERROR, msg, *args, status=status)
@@ -44,13 +55,16 @@ logger.debug = lambda msg, *args, status=None: custom_log(logging.DEBUG, msg, *a
 
 def get_path_to_root(node):
     """
+    Gets the full path from the current node to the root node in the taxonomy tree.
     获取从当前节点到根节点的完整路径
-    
+
     Parameters:
-    - node (Tree): 起始节点
-    
+    - node (Tree): The starting node.
+                   起始节点
+
     Returns:
-    - List[Tree]: 从当前节点到根的路径上的所有节点
+    - List[Tree]: A list of all nodes on the path from the current node to the root.
+
     """
     path = []
     current = node
@@ -61,56 +75,73 @@ def get_path_to_root(node):
     
 def calculate_taxonomic_penalty(taxid2node, taxid1, taxid2, lambda_param=1.0, max_distance=7):
     """
+    Calculates the taxonomic distance between two taxa and converts it into a penalty factor.
+    The penalty is based on the distance to their lowest common ancestor (LCA) in the taxonomy tree.
     计算两个分类单元之间的分类学距离，并转换为惩罚因子
-    
+
     Parameters:
-    - taxid2node (dict): taxid到Tree节点的映射字典
-    - taxid1 (str): 第一个分类单元的taxid
-    - taxid2 (str): 第二个分类单元的taxid
-    - lambda_param (float): 惩罚强度参数
-    - max_distance (int): 最大距离，用于归一化
-    
+    - taxid2node (dict): A dictionary mapping taxid to Tree node objects.
+                         taxid到Tree节点的映射字典
+    - taxid1 (str): The taxid of the first taxon.
+                    第一个分类单元的taxid
+    - taxid2 (str): The taxid of the second taxon.
+                    第二个分类单元的taxid
+    - lambda_param (float): Penalty strength parameter. Higher values mean stronger penalties for larger distances.
+                            惩罚强度参数
+    - max_distance (int): The maximum distance used for normalization. Distances beyond this are capped.
+                          最大距离，用于归一化
+
     Returns:
-    - float: 惩罚因子 (0-1之间的值)
+    - float: The penalty factor (a value between 0 and 1). 1.0 means no penalty (identical taxids or close relatives),
+             values closer to 0 mean higher penalty (distant relatives or missing taxids).
+             惩罚因子 (0-1之间的值)
     """
+    # If taxids are the same, no penalty
     # 如果taxid相同，无需惩罚
     if taxid1 == taxid2:
         return 1.0
         
+    # Handle cases where taxid is "0" (unclassified) - apply maximum penalty
     # 处理taxid为0的情况
     if taxid1 == "0" or taxid2 == "0":
-        return math.exp(-lambda_param)  # 最大惩罚
+        return math.exp(-lambda_param)  # Maximum penalty
     
+    # Handle cases where taxid is not found in the tree - apply maximum penalty
     # 处理taxid不在树中的情况
     if taxid1 not in taxid2node or taxid2 not in taxid2node:
-        return math.exp(-lambda_param)  # 最大惩罚
+        return math.exp(-lambda_param)  # Maximum penalty
     
+    # Get the corresponding Tree nodes
     # 获取对应的Tree节点
     node1 = taxid2node[taxid1]
     node2 = taxid2node[taxid2]
     
+    # Get paths to the root node
     # 获取到根节点的路径
     path1 = get_path_to_root(node1)
     path2 = get_path_to_root(node2)
     
+    # Find the lowest common ancestor (LCA)
     # 找到最近共同祖先
     lca = None
     for n1 in path1:
         for n2 in path2:
-            if n1.taxid == n2.taxid:  # 通过taxid比较而不是对象比较
+            if n1.taxid == n2.taxid:  # Compare by taxid, not object identity
                 lca = n1
                 break
         if lca:
             break
             
     if lca is None:
-        return math.exp(-lambda_param)  # 没有共同祖先时最大惩罚
+        return math.exp(-lambda_param)  # No common ancestor
         
+    # Calculate distances to the LCA
     # 计算距离
-    dist1 = path1.index(lca)  # node1到LCA的距离
-    dist2 = path2.index(lca)  # node2到LCA的距离
+    dist1 = path1.index(lca)  # Distance from node1 to LCA
+    dist2 = path2.index(lca)  # Distance from node2 to LCA
     distance = dist1 + dist2
     
+    # Normalize the distance and calculate the penalty factor using an exponential decay function
     # 归一化距离并计算惩罚因子
     normalized_distance = min(distance / max_distance, 1.0)
     penalty = math.exp(-lambda_param * normalized_distance)
@@ -119,36 +150,50 @@ def calculate_taxonomic_penalty(taxid2node, taxid1, taxid2, lambda_param=1.0, ma
 
 def precompute_taxonomic_penalties(read_kraken_taxids, log_p_rgs, taxid2node, lambda_param=1.0):
     """
+    Precomputes taxonomic penalty factors for all relevant read-candidate species pairs.
+    This avoids redundant calculations within the EM loop.
     预计算所有读段-物种对的分类学惩罚因子
-    
+
     Args:
-        read_kraken_taxids (dict): 读段到Kraken分类ID的映射 {read_id: taxid}
-        log_p_rgs (dict): 读段对应的物种对数似然字典 {read_id: ([taxids], [scores])}
-        taxid2node (dict): 分类ID到分类树节点的映射字典
-        lambda_param (float): 惩罚强度参数
-    
+        read_kraken_taxids (dict): Mapping from read ID to its Kraken-assigned taxid {read_id: taxid}.
+                                   读段到Kraken分类ID的映射 {read_id: taxid}
+        log_p_rgs (dict): Dictionary of log likelihoods for reads mapped to candidate species {read_id: ([taxids], [scores])}.
+                          读段对应的物种对数似然字典 {read_id: ([taxids], [scores])}
+        taxid2node (dict): Mapping from taxid to Tree node objects.
+                           分类ID到分类树节点的映射字典
+        lambda_param (float): Penalty strength parameter for calculate_taxonomic_penalty.
+                              惩罚强度参数
+
     Returns:
-        dict: 预计算的惩罚因子字典 {(read_id, candidate_taxid): penalty}
+        dict: A dictionary storing precomputed penalties {(read_id, candidate_taxid): penalty}.
+              预计算的惩罚因子字典 {(read_id, candidate_taxid): penalty}
     """
     penalty_dict = {}
-    logger.info(f"开始预计算分类学惩罚因子", status="run")
+    logger.info(f"Starting precomputation of taxonomic penalties", status="run")
     
+    # To reduce redundant calculations, first compute penalties for all unique taxid pairs
     # 为了减少重复计算，先计算所有taxid对之间的惩罚
     taxid_pair_penalties = {}
     
+    # Collect all unique (kraken_taxid, candidate_taxid) pairs
     # 收集所有唯一的taxid对
     unique_pairs = set()
     for r, (taxids, _) in log_p_rgs.items():
         if r in read_kraken_taxids:
-            kraken_taxid = str(read_kraken_taxids[r])
+            kraken_taxid = str(read_kraken_taxids[r]) # Ensure string comparison
             for candidate_taxid in taxids:
+                # Ensure candidate_taxid is also a string for consistent pairing
                 unique_pairs.add((kraken_taxid, str(candidate_taxid)))
     
+    # Precompute penalties for all unique pairs
     # 预计算所有唯一taxid对的惩罚
+    logger.info(f"Calculating penalties for {len(unique_pairs)} unique taxid pairs", status="run")
     for kraken_taxid, candidate_taxid in unique_pairs:
         taxid_pair_penalties[(kraken_taxid, candidate_taxid)] = calculate_taxonomic_penalty(
             taxid2node, kraken_taxid, candidate_taxid, lambda_param)
-    
+    logger.info(f"Finished calculating unique pair penalties", status="done")
+
+    # Assign the precomputed penalties to each read and its candidate species
     # 为每个读段和其候选物种计算惩罚
     for r, (taxids, _) in log_p_rgs.items():
         if r in read_kraken_taxids:
@@ -156,10 +201,12 @@ def precompute_taxonomic_penalties(read_kraken_taxids, log_p_rgs, taxid2node, la
             for candidate_taxid in taxids:
                 candidate_taxid_str = str(candidate_taxid)
                 pair_key = (kraken_taxid, candidate_taxid_str)
+                # Use the precomputed penalty; default to 1.0 if pair somehow wasn't precomputed (shouldn't happen)
                 penalty = taxid_pair_penalties.get(pair_key, 1.0)
+                # Store penalty using the original candidate_taxid type from log_p_rgs (likely int)
                 penalty_dict[(r, candidate_taxid)] = penalty
     
-    logger.info(f"预计算完成，共{len(penalty_dict)}个读段-物种对", status="done")
+    logger.info(f"Precomputation complete. Stored {len(penalty_dict)} read-species penalties.", status="done")
     return penalty_dict
 
 
@@ -222,7 +269,7 @@ class Tree(object):
             if rank == desired_parent_rank:
                 return lineage
             child = parent # needed for recursion
-        return lineage
+        return lineage # Return the lineage collected so far if root is reached
 
     def is_microbiome(self):
         is_microbiome = False
@@ -437,8 +484,8 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
     if not p_cigar_op_zero_locs:
         for alignment in sam_filename.fetch(until_eof=True):
             align_len = get_align_len(alignment)
-            identity = (alignment.query_alignment_length - alignment.get_tag("NM")) / alignment.infer_query_length()
-            if alignment.reference_name and align_len and identity > 0:
+            identity = (alignment.query_alignment_length - alignment.get_tag("NM")) / dict_longest_align[alignment.query_name]
+            if alignment.reference_name and align_len and identity >= 0.5:
                 cigar_stats = get_align_stats(alignment)
                 log_score, query_name, species_tid = \
                     compute_log_prob_rgs(alignment, cigar_stats, log_p_cigar_op,
@@ -460,7 +507,8 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
     else:
         for alignment in sam_filename.fetch(until_eof=True):
             align_len = get_align_len(alignment)
-            if alignment.reference_name and align_len:
+            identity = (alignment.query_alignment_length - alignment.get_tag("NM")) / dict_longest_align[alignment.query_name]
+            if alignment.reference_name and align_len and identity >= 0.5:
                 cigar_stats = get_align_stats(alignment)
                 if sum(cigar_stats[x] for x in p_cigar_op_zero_locs) == 0:
                     for i in sorted(p_cigar_op_zero_locs, reverse=True):
@@ -493,6 +541,33 @@ def log_prob_rgs_dict(sam_path, log_p_cigar_op, dict_longest_align, p_cigar_op_z
     #log_p_rgs = {r_map: val for r_map, val in log_p_rgs.items() if val > min_p_thresh}
     return log_p_rgs, unassigned_count, len(assigned_reads)
 
+def parse_kraken_qc(kraken_qc_file):
+    """
+    解析 Kraken QC 文件，提取物种 ID 和相对丰度
+    
+    Args:
+        kraken_qc_file (str): Kraken QC 文件路径
+    
+    Returns:
+        dict: {物种ID (int): 相对丰度 (float)}
+    """
+    
+    try:
+        krak2_qc = pd.read_csv(kraken_qc_file, sep='\t')
+        krak2_qc_species = krak2_qc[krak2_qc['classification_rank'] == 'S']
+        total_reads = krak2_qc_species['fragments'].sum()
+        # divide by total reads to get relative abundance
+        krak2_qc_species['relative_abundance'] = krak2_qc_species['fragments'] / total_reads
+        krak2_qc_species['ncbi_taxa'] = krak2_qc_species['ncbi_taxa'].astype(int)
+        species_abundance = dict(zip(krak2_qc_species['ncbi_taxa'], krak2_qc_species['relative_abundance']))
+    except FileNotFoundError:
+        logger.error(f"找不到 Kraken QC 文件: {kraken_qc_file}", status="error")
+        sys.exit()
+    except Exception as e:
+        logger.error(f"解析 Kraken QC 文件时出错: {e}", status="error")
+        sys.exit()
+
+    return species_abundance
 
 def expectation_maximization_iterations(log_p_rgs, freq, lli_thresh, input_threshold, read_kraken_taxids=None, taxid2node=None, lambda_param=1.0, save_iterations=None):
     """
@@ -593,7 +668,7 @@ def expectation_maximization_iterations(log_p_rgs, freq, lli_thresh, input_thres
                     # 加上log(penalty)到对数似然
                     log_penalty = math.log(max(penalty, 1e-300))
                     log_value = log_p + math.log(max(freq[g], 1e-300)) + log_penalty
-                    print(f"log_value: {log_value}, log_p: {log_p}, freq[g]: {math.log(max(freq[g], 1e-300))}, penalty: {log_penalty}")
+                    # print(f"log_value: {log_value}, log_p: {log_p}, freq[g]: {math.log(max(freq[g], 1e-300))}, penalty: {log_penalty}")
                     if log_value > max_log_p:
                         max_log_p = log_value
                 except ValueError:
@@ -821,11 +896,11 @@ if __name__ == "__main__":
     parser.add_argument('--output', required=True, help='输出文件路径')
     parser.add_argument('--kraken_output', required=True, help='kraken输出文件路径')
     parser.add_argument('--ktaxonomy_file', required=True, help='Kraken2 ktaxonomy file')
-    # parser.add_argument('--log_level', default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], help='日志级别')
     parser.add_argument('--log_file', default='emu_em.log', help='日志文件路径')
     parser.add_argument('--verbose', action='store_true', help='是否输出详细日志信息')
     parser.add_argument('--save_iterations', type=str, help='要保存的迭代结果，逗号分隔的数字，例如 "1,5,10,15,20"')
     parser.add_argument('--iteration_output', help='迭代结果输出目录')
+    parser.add_argument('--kraken_qc', help='Kraken QC 文件路径，用于初始化物种丰度')
     args = parser.parse_args()
 
     # Set log level based on command line arguments
@@ -878,7 +953,7 @@ if __name__ == "__main__":
     # check if there are enough reads
 
 
-    freq, counter = dict.fromkeys(db_ids, 1 / n_db), 1
+    counter = 1
 
     # 处理迭代保存参数
     if args.save_iterations:
@@ -919,10 +994,38 @@ if __name__ == "__main__":
         logger.error("Couldn't get the taxonmy full lineage infomation from NCBI nodes.dump")
         sys.exit()
 
+    # 使用 Kraken QC 文件初始化物种丰度，如果文件不存在则使用均匀分布
+    if args.kraken_qc:
+        logger.info('从 Kraken QC 文件加载初始物种丰度', status='run')
+        kraken_abundances = parse_kraken_qc(args.kraken_qc)
+        
+        # 初始化所有物种的丰度为很小的值
+        freq = dict.fromkeys(db_ids, 1e-5)
+        # TODO 现在版本中，由于是全部样本的微生物进行建库比对，所以有的样本qc里会没有reference的微生物
+        # 更新从 Kraken QC 文件中提取的物种丰度
+        for taxid, abundance in kraken_abundances.items():
+            if taxid in freq:
+                freq[taxid] = max(abundance, 1e-5)  # 确保丰度不为0
+
+        # 归一化丰度，确保总和为1
+        total = sum(freq.values())
+        freq = {k: v/total for k, v in freq.items()}
+        
+        # # 检测kraken_abundances是否包含所有db_ids
+        # missing_taxa = set(db_ids) - set(kraken_abundances.keys())
+        # if missing_taxa:
+        #     logger.error(f"Kraken QC 文件中缺少以下物种: {missing_taxa}")
+        #     sys.exit()
+
+        
+        logger.info(f'成功从 Kraken QC 文件加载初始物种丰度 ({len(kraken_abundances)} 个物种)', status='done')
+    else:
+        # 使用均匀分布
+        freq = dict.fromkeys(db_ids, 1 / n_db)
 
     # 在调用EM算法时传入Kraken分类信息和分类树
     f_full, f_set_thresh, read_dist, iteration_results = expectation_maximization_iterations(
-        log_prob_rgs, freq, 0.01, 0.00001, read_kraken_taxids, taxid2node, 1.0, save_iterations)
+        log_prob_rgs, freq, 0.01, 0.00001, read_kraken_taxids, taxid2node, 2.5, save_iterations)
 
     print(f"Number of EM iterations: {counter}\n")
     print(f"Number of species in f_full: {len(f_full)}")
