@@ -10,8 +10,11 @@ parts:
         - file: start/input
         - file: start/database
         - file: start/quick-start
-    # - caption: ADVANCED
-    #   chapters:
+        
+    - caption: ADVANCED
+      chapters:
+        - file: advanced/custom_config
+        - file: advanced/modify_module
 
     - caption: COMMAND LINE TOOLS
       chapters:
