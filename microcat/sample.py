@@ -176,6 +176,7 @@ def parse_bam_samples(sample_tsv, platform):
         if not bam_exists:
             raise FileNotFoundError(f"File not found: {row['bam']}")
         
+        
         # Check the mtx file
         mtx_path = row['mtx']
         if os.path.isdir(mtx_path):

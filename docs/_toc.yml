@@ -3,8 +3,25 @@
 
 format: jb-book
 root: intro
-chapters:
-- file: install
-- file: input
-- file: database
-- file: quick-start
+parts:
+    - caption: GET STARTED
+      chapters:
+        - file: start/install
+        - file: start/input
+        - file: start/database
+        - file: start/quick-start
+    # - caption: ADVANCED
+    #   chapters:
+
+    - caption: COMMAND LINE TOOLS
+      chapters:
+        - file: command_line/microcat_init
+        - file: command_line/microcat_run-local
+        - file: command_line/microcat_run-remote
+        - file: command_line/microcat_run-debug
+        - file: command_line/microcat_download
+        - file: command_line/microcat_path
+        - file: command_line/microcat_config
+
+    # - caption: PROJECT INFORMATION
+    #   chapters:
