@@ -54,3 +54,85 @@
   year      = {2008},
   publisher = {O'Reilly Media}
 }
+
+
+%database
+@article{lu2018removing,
+  title={Removing contaminants from databases of draft genomes},
+  author={Lu, Jennifer and Salzberg, Steven L},
+  journal={PLoS computational biology},
+  volume={14},
+  number={6},
+  pages={e1006277},
+  year={2018},
+  publisher={Public Library of Science San Francisco, CA USA}
+}
+
+%% 数据库污染
+@article{doster_cautionary_2019,
+	title = {A {Cautionary} {Report} for {Pathogen} {Identification} {Using} {Shotgun} {Metagenomics}; {A} {Comparison} to {Aerobic} {Culture} and {Polymerase} {Chain} {Reaction} for {Salmonella} enterica {Identification}},
+	volume = {10},
+	issn = {1664-302X},
+	url = {https://www.frontiersin.org/articles/10.3389/fmicb.2019.02499},
+	abstract = {This study was conducted to compare aerobic culture, polymerase chain reaction (PCR), lateral flow immunoassay (LFI), and shotgun metagenomics for identification of Salmonella enterica in feces collected from feedlot cattle. Samples were analyzed in parallel using all four tests. Results from aerobic culture and PCR were 100\% concordant and indicated low S. enterica prevalence (3/60 samples positive). Although low S. enterica prevalence restricted formal statistical comparisons, LFI and deep metagenomic sequencing results were discordant with these results. Specifically, metagenomic analysis using k-mer-based classification against the RefSeq database indicated that 11/60 of samples contained sequence reads that matched to the S. enterica genome and uniquely identified this species of bacteria within the sample. However, further examination revealed that plasmid sequences were often included with bacterial genomic sequence data submitted to NCBI, which can lead to incorrect taxonomic classification. To circumvent this classification problem, we separated all plasmid sequences included in bacterial RefSeq genomes and reassigned them to a unique taxon so that they would not be uniquely associated with specific bacterial species such as S. enterica. Using this revised database and taxonomic structure, we found that only 6/60 samples contained sequences specific for S. enterica, suggesting increased relative specificity. Reads identified as S. enterica in these six samples were further evaluated using BLAST and NCBI’s nr/nt database, which identified that only 2/60 samples contained reads exclusive to S. enterica chromosomal genomes. These two samples were culture- and PCR-negative, suggesting that even deep metagenomic sequencing suffers from lower sensitivity and specificity in comparison to more traditional pathogen detection methods. Additionally, no sample reads were taxonomically classified as S. enterica with two other metagenomic tools, Metagenomic Intra-species Diversity Analysis System (MIDAS) and Metagenomic Phylogenetic Analysis 2 (MetaPhlAn2). This study re-affirmed that the traditional techniques of aerobic culture and PCR provide similar results for S. enterica identification in cattle feces. On the other hand, metagenomic results are highly influenced by the classification method and reference database employed. These results highlight the nuances of computational detection of species-level sequences within short-read metagenomic sequence data, and emphasize the need for cautious interpretation of such results.},
+	urldate = {2023-04-07},
+	journal = {Frontiers in Microbiology},
+	author = {Doster, Enrique and Rovira, Pablo and Noyes, Noelle R. and Burgess, Brandy A. and Yang, Xiang and Weinroth, Margaret D. and Linke, Lyndsey and Magnuson, Roberta and Boucher, Christina and Belk, Keith E. and Morley, Paul S.},
+	year = {2019},
+	annote = {A Cautionary Report for Pathogen Identification Using Shotgun Metagenomics; A Comparison to Aerobic Culture and Polymerase Chain Reaction for Salmonella enterica Identification},
+	file = {Full Text PDF:C\:\\Users\\cheon\\Zotero\\storage\\A5Z3QWDR\\Doster 等 - 2019 - A Cautionary Report for Pathogen Identification Us.pdf:application/pdf},
+}
+
+
+
+% spike in 去除 环境RNA
+@article{marquina2020single,
+  title={Single-cell RNA-seq with spike-in cells enables accurate quantification of cell-specific drug effects in pancreatic islets},
+  author={Marquina-Sanchez, Brenda and Fortelny, Nikolaus and Farlik, Matthias and Vieira, Andhira and Collombat, Patrick and Bock, Christoph and Kubicek, Stefan},
+  journal={Genome biology},
+  volume={21},
+  pages={1--22},
+  year={2020},
+  publisher={Springer}
+}
+
+
+% KRAKEN2
+@article{wood_improved_2019,
+	title = {Improved metagenomic analysis with {Kraken} 2},
+	volume = {20},
+	issn = {1474-760X},
+	url = {https://doi.org/10.1186/s13059-019-1891-0},
+	doi = {10.1186/s13059-019-1891-0},
+	abstract = {Although Kraken’s k-mer-based approach provides a fast taxonomic classification of metagenomic sequence data, its large memory requirements can be limiting for some applications. Kraken 2 improves upon Kraken 1 by reducing memory usage by 85\%, allowing greater amounts of reference genomic data to be used, while maintaining high accuracy and increasing speed fivefold. Kraken 2 also introduces a translated search mode, providing increased sensitivity in viral metagenomics analysis.},
+	number = {1},
+	urldate = {2023-01-31},
+	journal = {Genome Biology},
+	author = {Wood, Derrick E. and Lu, Jennifer and Langmead, Ben},
+	month = nov,
+	year = {2019},
+	keywords = {/unread, Microbiome, Metagenomics, Alignment-free methods, Metagenomics classification, Minimizers, Probabilistic data structures},
+	pages = {257},
+	annote = {Improved metagenomic analysis with Kraken 2},
+	file = {Snapshot:C\:\\Users\\cheon\\Zotero\\storage\\B5ICYG7Y\\s13059-019-1891-0.html:text/html;Wood et al_2019_Improved metagenomic analysis with Kraken 2.pdf:C\:\\Users\\cheon\\Zotero\\storage\\APHIRM85\\Wood et al_2019_Improved metagenomic analysis with Kraken 2.pdf:application/pdf},
+}
+
+%% 单细胞组学测序最佳实践
+@article{heumos2023best,
+  title={Best practices for single-cell analysis across modalities},
+  author={Heumos, Lukas and Schaar, Anna C and Lance, Christopher and Litinetskaya, Anastasia and Drost, Felix and Zappia, Luke and L{\"u}cken, Malte D and Strobl, Daniel C and Henao, Juan and Curion, Fabiola and others},
+  journal={Nature Reviews Genetics},
+  pages={1--23},
+  year={2023},
+  publisher={Nature Publishing Group UK London}
+}
+
+%% 数据库问题
+@article{xu2022selection,
+  title={Selection of software and database for metagenomics sequence analysis impacts the outcome of microbial profiling and pathogen detection},
+  author={Xu, Ruijie and Salvador, Liliana and Sreekumari Rajeev, Sreekumari},
+  journal={bioRxiv},
+  pages={2022--04},
+  year={2022},
+  publisher={Cold Spring Harbor Laboratory}
+}
