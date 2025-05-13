@@ -1,5 +1,3 @@
-# MicroCAT
-
 <div align="center">
 
 # MicroCAT
@@ -29,14 +27,14 @@ MicroCAT runs on Python 3.8 and above. We provide several installation methods:
 ```
 conda create -n MICROCAT -c bioconda microcat
 ```
-If you don't have conda in your environment, we recommend installing it first. See the [official conda documentation](https://docs.conda.io/projects/conda/en/latest/user-guide/install/) for installation instructions.
+
 
 ### Pip Installation
 Use [pip](https://pip.pypa.io/en/stable/installation/) to quickly install microcat from [PyPI](https://pypi.org/):
 ```
 pip install microcat
 ```
-Then install the software required to run microcat, or use the '--use-conda' parameter during execution to automatically build the runtime environment (see [microcat's official documentation](https://github.com/zhaofangyuan98/MicroCAT/wiki/MicroCAT-Tutorial)).
+Then install the software required to run microcat, or use the '--use-conda' parameter during execution to automatically build the runtime environment (see [microcat's official documentation](https://changxingsu.github.io/MicroCAT)).
 
 
 ### Docker Image
@@ -45,7 +43,7 @@ Then install the software required to run microcat, or use the '--use-conda' par
 
 ## 📄 Documentation
 
-For detailed usage methods and parameter descriptions, please refer to [microcat's official documentation](https://github.com/zhaofangyuan98/MicroCAT/wiki/MicroCAT-Tutorial).
+For detailed usage methods and parameter descriptions, please refer to [microcat's official documentation](https://changxingsu.github.io/MicroCAT).
 
 The official documentation includes:
 - Detailed installation guide
@@ -86,6 +84,6 @@ We welcome your participation in the development of MicroCAT! You can contribute
 - Improve documentation
 - Share your user experience
 
-For specific contribution methods, please refer to [microcat's official documentation](https://github.com/zhaofangyuan98/MicroCAT/wiki/MicroCAT-Tutorial).
+For specific contribution methods, please refer to [microcat's official documentation](https://changxingsu.github.io/MicroCAT).
 
 Thank you to all contributors for your support and help!
